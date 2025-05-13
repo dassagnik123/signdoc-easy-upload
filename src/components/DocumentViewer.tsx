@@ -4,7 +4,7 @@ import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
 import { Button } from "@/components/ui/button";
-import { Signature, MoveHorizontal } from "lucide-react";
+import { Signature, MoveHorizontal, FileText } from "lucide-react";
 
 // Set the worker source for react-pdf
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
@@ -31,6 +31,7 @@ export const DocumentViewer = ({
   const [scale, setScale] = useState(1.0);
   const [signingMode, setSigningMode] = useState(false);
   const documentRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   // Reset page number when file changes
   useEffect(() => {
@@ -61,12 +62,14 @@ export const DocumentViewer = ({
     if (!signingMode || !signatureImage) return;
 
     // Get the bounding rectangle of the clicked element
-    const rect = documentRef.current?.getBoundingClientRect();
+    const rect = contentRef.current?.getBoundingClientRect();
     if (!rect) return;
 
     // Calculate the position relative to the document viewer
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
+
+    console.log("Click position:", { x, y, scale, rect });
 
     // Apply signature at the calculated position
     onApplySignature({
@@ -97,27 +100,40 @@ export const DocumentViewer = ({
       );
     } else if (fileType.startsWith("image/")) {
       return (
-        <img 
-          src={file} 
-          alt="Document" 
-          style={{ maxWidth: '100%', transform: `scale(${scale})`, transformOrigin: 'top left' }} 
-        />
+        <div className="relative">
+          <img 
+            src={file} 
+            alt="Document" 
+            style={{ 
+              maxWidth: '100%', 
+              transform: `scale(${scale})`, 
+              transformOrigin: 'top left' 
+            }} 
+          />
+        </div>
       );
-    } else if (fileType.startsWith("text/") || fileType.includes("word")) {
+    } else if (fileType.startsWith("text/")) {
       return (
         <div className="p-4 bg-white border rounded-md">
-          <p className="text-center mb-4">
-            {fileType.includes("word") 
-              ? "Word document preview not available, but you can still sign this document" 
-              : "Text document"}
+          <iframe 
+            src={file} 
+            title="Text document" 
+            className="w-full min-h-[500px] border"
+          />
+        </div>
+      );
+    } else if (fileType.includes("word")) {
+      return (
+        <div className="p-8 bg-white border rounded-md flex flex-col items-center justify-center space-y-4">
+          <FileText className="w-16 h-16 text-blue-600" />
+          <h3 className="text-lg font-medium">Word Document</h3>
+          <p className="text-center text-gray-500 max-w-md">
+            Word document preview is not available, but you can still sign this document. 
+            Click the "Place Signature" button to add your signature.
           </p>
-          {fileType.startsWith("text/") && (
-            <iframe 
-              src={file} 
-              title="Text document" 
-              className="w-full min-h-[500px] border"
-            />
-          )}
+          <div className="p-4 border border-dashed border-gray-300 w-full max-w-lg min-h-[300px] flex items-center justify-center">
+            <p className="text-gray-400">Signature will be placed in this document</p>
+          </div>
         </div>
       );
     }
@@ -196,9 +212,12 @@ export const DocumentViewer = ({
           signingMode ? "cursor-crosshair" : ""
         }`}
         ref={documentRef}
-        onClick={signingMode ? handlePageClick : undefined}
       >
-        <div>
+        <div 
+          ref={contentRef}
+          onClick={signingMode ? handlePageClick : undefined}
+          className={signingMode ? "cursor-crosshair" : ""}
+        >
           {renderContent()}
         </div>
       </div>

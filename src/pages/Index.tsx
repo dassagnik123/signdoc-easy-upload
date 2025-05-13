@@ -44,6 +44,9 @@ const Index = () => {
     setSignaturePosition(position);
     
     try {
+      console.log("Applying signature at position:", position);
+      console.log("File type:", file.type);
+      
       // For PDF files
       if (file.type === "application/pdf") {
         // Load the PDF document
@@ -89,30 +92,62 @@ const Index = () => {
         const img = new Image();
         img.src = URL.createObjectURL(file);
         
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
           img.onload = resolve;
+          img.onerror = reject;
         });
         
         const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
+        const sourceWidth = img.naturalWidth || img.width;
+        const sourceHeight = img.naturalHeight || img.height;
+        
+        canvas.width = sourceWidth;
+        canvas.height = sourceHeight;
         
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error("Could not get canvas context");
         
         // Draw the original image
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0, sourceWidth, sourceHeight);
         
         // Create and draw the signature image
         const sigImg = new Image();
         sigImg.src = signatureImage;
         
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
           sigImg.onload = resolve;
+          sigImg.onerror = reject;
         });
         
-        // Draw the signature at the specified position
-        ctx.drawImage(sigImg, position.x, position.y, 200, 50);
+        // Signature dimensions - adjust as needed
+        const sigWidth = 200;
+        const sigHeight = 50;
+        
+        // Draw the signature at the specified position, making sure it's visible
+        ctx.drawImage(sigImg, 
+          Math.min(position.x, sourceWidth - sigWidth), 
+          Math.min(position.y, sourceHeight - sigHeight), 
+          sigWidth, sigHeight
+        );
+        
+        // For Word documents or text files, create a placeholder signed version
+        if (file.type.includes("word") || file.type.startsWith("text/")) {
+          // Create a preview that shows the document with signature overlay
+          ctx.fillStyle = "rgba(240, 240, 240, 0.8)";
+          ctx.fillRect(0, 0, sourceWidth, sourceHeight);
+          
+          ctx.font = "24px Arial";
+          ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+          ctx.textAlign = "center";
+          ctx.fillText("DOCUMENT SIGNED", sourceWidth / 2, sourceHeight / 2);
+          
+          // Draw the signature again so it's clearly visible
+          ctx.drawImage(sigImg, 
+            Math.min(position.x, sourceWidth - sigWidth), 
+            Math.min(position.y, sourceHeight - sigHeight), 
+            sigWidth, sigHeight
+          );
+        }
         
         // Convert canvas to data URL and create a blob URL
         const dataUrl = canvas.toDataURL(file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png');
@@ -128,7 +163,7 @@ const Index = () => {
     } catch (error) {
       console.error("Error applying signature:", error);
       toast.error("Error signing document", {
-        description: "There was a problem applying your signature.",
+        description: "There was a problem applying your signature. Please try again.",
       });
     } finally {
       setIsProcessing(false);
