@@ -14,12 +14,18 @@ export const Upload = ({ onFileUpload }: UploadProps) => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      // Only handle PDF files
       const file = files[0];
-      if (file.type === "application/pdf") {
+      const allowedTypes = [
+        "application/pdf", // PDF
+        "image/jpeg", "image/png", "image/gif", // Images
+        "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // Word
+        "text/plain" // Text
+      ];
+      
+      if (allowedTypes.includes(file.type)) {
         onFileUpload(file);
       } else {
-        alert("Please upload a PDF file");
+        alert("Please upload a PDF, image, Word, or text file");
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
@@ -32,12 +38,12 @@ export const Upload = ({ onFileUpload }: UploadProps) => {
       <FilePen className="h-12 w-12 text-gray-400" />
       <div className="text-center">
         <h3 className="font-medium">Upload Document</h3>
-        <p className="text-sm text-gray-500 mt-1">PDF files only</p>
+        <p className="text-sm text-gray-500 mt-1">PDF, Images, Word or Text files</p>
       </div>
       <Input
         ref={fileInputRef}
         type="file"
-        accept="application/pdf"
+        accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.txt"
         onChange={handleFileChange}
         className="hidden"
         id="file-upload"

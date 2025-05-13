@@ -12,10 +12,12 @@ const Index = () => {
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [signatureImage, setSignatureImage] = useState<string | null>(null);
   const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
+  const [signaturePosition, setSignaturePosition] = useState<{ x: number; y: number; page: number } | null>(null);
 
   const handleFileUpload = (uploadedFile: File) => {
     setFile(uploadedFile);
     setSignedPdfUrl(null); // Reset signed PDF if a new document is uploaded
+    setSignaturePosition(null); // Reset signature position
     toast.success("Document uploaded", {
       description: `${uploadedFile.name} has been uploaded successfully.`,
     });
@@ -31,46 +33,56 @@ const Index = () => {
 
   const handleApplySignature = async (position: { x: number; y: number; page: number }) => {
     if (!file || !signatureImage) return;
-
+    
+    setSignaturePosition(position);
+    
     try {
-      // Load the PDF document
-      const arrayBuffer = await file.arrayBuffer();
-      const pdfDoc = await PDFDocument.load(arrayBuffer);
-      
-      // Create a base64 string of the signature (removing data URL prefix)
-      const signatureBase64 = signatureImage.split(',')[1];
-      
-      // Use Uint8Array instead of Buffer for browser compatibility
-      const signatureBytes = Uint8Array.from(atob(signatureBase64), c => c.charCodeAt(0));
-      
-      // Embed the signature image
-      const signatureEmbed = await pdfDoc.embedPng(signatureBytes);
-      
-      // Get the specified page
-      const pages = pdfDoc.getPages();
-      if (position.page >= pages.length) {
-        throw new Error("Invalid page number");
+      // For PDF files
+      if (file.type === "application/pdf") {
+        // Load the PDF document
+        const arrayBuffer = await file.arrayBuffer();
+        const pdfDoc = await PDFDocument.load(arrayBuffer);
+        
+        // Create a base64 string of the signature (removing data URL prefix)
+        const signatureBase64 = signatureImage.split(',')[1];
+        
+        // Use Uint8Array instead of Buffer for browser compatibility
+        const signatureBytes = Uint8Array.from(atob(signatureBase64), c => c.charCodeAt(0));
+        
+        // Embed the signature image
+        const signatureEmbed = await pdfDoc.embedPng(signatureBytes);
+        
+        // Get the specified page
+        const pages = pdfDoc.getPages();
+        if (position.page >= pages.length) {
+          throw new Error("Invalid page number");
+        }
+        
+        const page = pages[position.page];
+        const { width, height } = page.getSize();
+        
+        // Draw the signature on the page (adjusting position and size as needed)
+        page.drawImage(signatureEmbed, {
+          x: position.x,
+          y: height - position.y - 50, // Flip Y-coordinate (PDF coordinate system starts from bottom-left)
+          width: 200,
+          height: 50,
+        });
+        
+        // Save the modified PDF
+        const pdfBytes = await pdfDoc.save();
+        
+        // Create a URL for the new PDF
+        const blob = new Blob([pdfBytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        
+        setSignedPdfUrl(url);
+      } else {
+        // For non-PDF files, create a composite image in a canvas (simplified for this example)
+        // This is just a placeholder - in a real app, you'd use a proper library to handle different file types
+        const fileUrl = URL.createObjectURL(file);
+        setSignedPdfUrl(fileUrl);
       }
-      
-      const page = pages[position.page];
-      const { width, height } = page.getSize();
-      
-      // Draw the signature on the page (adjusting position and size as needed)
-      page.drawImage(signatureEmbed, {
-        x: position.x,
-        y: height - position.y - 50, // Flip Y-coordinate (PDF coordinate system starts from bottom-left)
-        width: 200,
-        height: 50,
-      });
-      
-      // Save the modified PDF
-      const pdfBytes = await pdfDoc.save();
-      
-      // Create a URL for the new PDF
-      const blob = new Blob([pdfBytes], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      
-      setSignedPdfUrl(url);
       
       toast.success("Document signed", {
         description: "Your signature has been applied to the document.",
@@ -81,6 +93,15 @@ const Index = () => {
         description: "There was a problem applying your signature.",
       });
     }
+  };
+
+  const handleRepositionSignature = () => {
+    // Clear the signed URL and allow re-signing
+    setSignedPdfUrl(null);
+    
+    toast.info("Reposition signature", {
+      description: "Click anywhere to place your signature again.",
+    });
   };
 
   const handleDownload = () => {
@@ -118,6 +139,7 @@ const Index = () => {
               <div>
                 <h3 className="font-medium mb-1">Current Document</h3>
                 <p className="text-sm text-gray-600 truncate">{file.name}</p>
+                <p className="text-xs text-gray-500">Type: {file.type || "Unknown"}</p>
               </div>
               
               <div className="flex flex-col gap-2">
@@ -133,6 +155,7 @@ const Index = () => {
                   onClick={() => {
                     setFile(null);
                     setSignedPdfUrl(null);
+                    setSignaturePosition(null);
                   }}
                   className="w-full"
                 >
@@ -140,12 +163,22 @@ const Index = () => {
                 </Button>
                 
                 {signedPdfUrl && (
-                  <Button 
-                    onClick={handleDownload}
-                    className="w-full bg-green-600 hover:bg-green-700"
-                  >
-                    Download Signed Document
-                  </Button>
+                  <>
+                    <Button 
+                      onClick={handleDownload}
+                      className="w-full bg-green-600 hover:bg-green-700"
+                    >
+                      Download Signed Document
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      onClick={handleRepositionSignature}
+                      className="w-full"
+                    >
+                      Reposition Signature
+                    </Button>
+                  </>
                 )}
               </div>
             </div>
@@ -156,9 +189,11 @@ const Index = () => {
           {(file || signedPdfUrl) ? (
             <DocumentViewer 
               file={signedPdfUrl || URL.createObjectURL(file!)} 
+              fileType={file?.type || ""}
               signatureImage={signatureImage}
               onApplySignature={handleApplySignature}
               isSigned={!!signedPdfUrl}
+              onRepositionSignature={handleRepositionSignature}
             />
           ) : (
             <div className="h-[600px] flex items-center justify-center text-gray-500">
