@@ -16,8 +16,7 @@ const Index = () => {
   const handleFileUpload = (uploadedFile: File) => {
     setFile(uploadedFile);
     setSignedPdfUrl(null); // Reset signed PDF if a new document is uploaded
-    toast({
-      title: "Document uploaded",
+    toast.success("Document uploaded", {
       description: `${uploadedFile.name} has been uploaded successfully.`,
     });
   };
@@ -25,8 +24,7 @@ const Index = () => {
   const handleSignatureCreate = (signatureDataUrl: string) => {
     setSignatureImage(signatureDataUrl);
     setSignatureOpen(false);
-    toast({
-      title: "Signature created",
+    toast.success("Signature created", {
       description: "Your signature has been created successfully.",
     });
   };
@@ -72,16 +70,13 @@ const Index = () => {
       
       setSignedPdfUrl(url);
       
-      toast({
-        title: "Document signed",
+      toast.success("Document signed", {
         description: "Your signature has been applied to the document.",
       });
     } catch (error) {
       console.error("Error applying signature:", error);
-      toast({
-        title: "Error signing document",
+      toast.error("Error signing document", {
         description: "There was a problem applying your signature.",
-        variant: "destructive",
       });
     }
   };
@@ -96,8 +91,7 @@ const Index = () => {
     a.click();
     document.body.removeChild(a);
     
-    toast({
-      title: "Download started",
+    toast.success("Download started", {
       description: "Your signed document is being downloaded.",
     });
   };
@@ -159,7 +153,7 @@ const Index = () => {
         <div className="w-full md:w-2/3 bg-white rounded-lg shadow overflow-hidden">
           {(file || signedPdfUrl) ? (
             <DocumentViewer 
-              file={signedPdfUrl || URL.createObjectURL(file)} 
+              file={signedPdfUrl || URL.createObjectURL(file!)} 
               signatureImage={signatureImage}
               onApplySignature={handleApplySignature}
               isSigned={!!signedPdfUrl}
