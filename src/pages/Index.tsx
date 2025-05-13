@@ -40,9 +40,11 @@ const Index = () => {
       // Create a base64 string of the signature (removing data URL prefix)
       const signatureBase64 = signatureImage.split(',')[1];
       
+      // Use Uint8Array instead of Buffer for browser compatibility
+      const signatureBytes = Uint8Array.from(atob(signatureBase64), c => c.charCodeAt(0));
+      
       // Embed the signature image
-      const signatureImageBytes = Buffer.from(signatureBase64, 'base64');
-      const signatureEmbed = await pdfDoc.embedPng(signatureImageBytes);
+      const signatureEmbed = await pdfDoc.embedPng(signatureBytes);
       
       // Get the specified page
       const pages = pdfDoc.getPages();
