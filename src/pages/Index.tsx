@@ -13,6 +13,7 @@ const Index = () => {
   const [signatureImage, setSignatureImage] = useState<string | null>(null);
   const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
   const [signaturePosition, setSignaturePosition] = useState<{ x: number; y: number; page: number } | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleFileUpload = (uploadedFile: File) => {
     setFile(uploadedFile);
@@ -32,8 +33,14 @@ const Index = () => {
   };
 
   const handleApplySignature = async (position: { x: number; y: number; page: number }) => {
-    if (!file || !signatureImage) return;
+    if (!file || !signatureImage) {
+      toast.error("Error signing document", {
+        description: "Both document and signature are required.",
+      });
+      return;
+    }
     
+    setIsProcessing(true);
     setSignaturePosition(position);
     
     try {
@@ -78,10 +85,41 @@ const Index = () => {
         
         setSignedPdfUrl(url);
       } else {
-        // For non-PDF files, create a composite image in a canvas (simplified for this example)
-        // This is just a placeholder - in a real app, you'd use a proper library to handle different file types
-        const fileUrl = URL.createObjectURL(file);
-        setSignedPdfUrl(fileUrl);
+        // For other file types like images, create a canvas to composite the signature
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        
+        await new Promise((resolve) => {
+          img.onload = resolve;
+        });
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error("Could not get canvas context");
+        
+        // Draw the original image
+        ctx.drawImage(img, 0, 0);
+        
+        // Create and draw the signature image
+        const sigImg = new Image();
+        sigImg.src = signatureImage;
+        
+        await new Promise((resolve) => {
+          sigImg.onload = resolve;
+        });
+        
+        // Draw the signature at the specified position
+        ctx.drawImage(sigImg, position.x, position.y, 200, 50);
+        
+        // Convert canvas to data URL and create a blob URL
+        const dataUrl = canvas.toDataURL(file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png');
+        const blob = await (await fetch(dataUrl)).blob();
+        const url = URL.createObjectURL(blob);
+        
+        setSignedPdfUrl(url);
       }
       
       toast.success("Document signed", {
@@ -92,6 +130,8 @@ const Index = () => {
       toast.error("Error signing document", {
         description: "There was a problem applying your signature.",
       });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -146,6 +186,7 @@ const Index = () => {
                 <Button 
                   onClick={() => setSignatureOpen(true)}
                   className="w-full"
+                  disabled={isProcessing}
                 >
                   {signatureImage ? "Change Signature" : "Create Signature"}
                 </Button>
@@ -158,6 +199,7 @@ const Index = () => {
                     setSignaturePosition(null);
                   }}
                   className="w-full"
+                  disabled={isProcessing}
                 >
                   Upload New Document
                 </Button>
@@ -167,6 +209,7 @@ const Index = () => {
                     <Button 
                       onClick={handleDownload}
                       className="w-full bg-green-600 hover:bg-green-700"
+                      disabled={isProcessing}
                     >
                       Download Signed Document
                     </Button>
@@ -175,6 +218,7 @@ const Index = () => {
                       variant="outline"
                       onClick={handleRepositionSignature}
                       className="w-full"
+                      disabled={isProcessing}
                     >
                       Reposition Signature
                     </Button>

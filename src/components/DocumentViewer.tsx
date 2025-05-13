@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
@@ -30,6 +30,7 @@ export const DocumentViewer = ({
   const [pageNumber, setPageNumber] = useState(1);
   const [scale, setScale] = useState(1.0);
   const [signingMode, setSigningMode] = useState(false);
+  const documentRef = useRef<HTMLDivElement>(null);
 
   // Reset page number when file changes
   useEffect(() => {
@@ -59,10 +60,15 @@ export const DocumentViewer = ({
   const handlePageClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!signingMode || !signatureImage) return;
 
-    const rect = e.currentTarget.getBoundingClientRect();
+    // Get the bounding rectangle of the clicked element
+    const rect = documentRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    // Calculate the position relative to the document viewer
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    // Apply signature at the calculated position
     onApplySignature({
       x: x / scale,
       y: y / scale,
@@ -189,8 +195,10 @@ export const DocumentViewer = ({
         className={`flex-1 overflow-auto p-4 flex justify-center ${
           signingMode ? "cursor-crosshair" : ""
         }`}
+        ref={documentRef}
+        onClick={signingMode ? handlePageClick : undefined}
       >
-        <div onClick={handlePageClick}>
+        <div>
           {renderContent()}
         </div>
       </div>
