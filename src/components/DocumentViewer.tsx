@@ -1,10 +1,10 @@
-
 import { useEffect, useState, useRef } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 import "react-pdf/dist/esm/Page/TextLayer.css";
 import { Button } from "@/components/ui/button";
 import { Signature, MoveHorizontal, FileText } from "lucide-react";
+import { renderAsync } from "docx-preview";
 
 // Set the worker source for react-pdf
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
@@ -32,13 +32,47 @@ export const DocumentViewer = ({
   const [pageNumber, setPageNumber] = useState(1);
   const [scale, setScale] = useState(1.0);
   const [signingMode, setSigningMode] = useState(false);
+  const [isWordLoading, setIsWordLoading] = useState(false);
+  const [wordError, setWordError] = useState<string | null>(null);
   const documentRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const wordContainerRef = useRef<HTMLDivElement>(null);
 
   // Reset page number when file changes
   useEffect(() => {
     setPageNumber(1);
-  }, [file]);
+    setWordError(null);
+    
+    // If this is a Word document, render it using docx-preview
+    if ((fileType.includes("word") || fileType.includes("doc")) && wordContainerRef.current && !isSigned) {
+      renderWordDocument();
+    }
+  }, [file, fileType]);
+
+  const renderWordDocument = async () => {
+    if (!wordContainerRef.current || !(fileType.includes("word") || fileType.includes("doc"))) return;
+    
+    setIsWordLoading(true);
+    setWordError(null);
+    
+    try {
+      // For files stored as URL (like Blob URLs)
+      const response = await fetch(file);
+      const blob = await response.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+      
+      await renderAsync(arrayBuffer, wordContainerRef.current, null, {
+        className: "docx-viewer",
+        inWrapper: true,
+        useBase64URL: true
+      });
+    } catch (error) {
+      console.error("Error rendering Word document:", error);
+      setWordError("Failed to render Word document. You can still sign it.");
+    } finally {
+      setIsWordLoading(false);
+    }
+  };
 
   const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -79,12 +113,8 @@ export const DocumentViewer = ({
       y: y / scale,
       page: pageNumber - 1
     });
-    
-    // Don't exit signing mode to allow multiple signatures
-    // setSigningMode(false);
   };
 
-  // Render signatures overlaid on the document
   const renderSignatures = () => {
     if (!signatures || signatures.length === 0) return null;
 
@@ -166,30 +196,53 @@ export const DocumentViewer = ({
       );
     } else if (fileType.includes("word") || fileType.includes("doc")) {
       return (
-        <div className="p-8 bg-white border rounded-md flex flex-col items-center justify-center space-y-4 relative min-h-[600px]">
-          <FileText className="w-16 h-16 text-blue-600" />
-          <h3 className="text-lg font-medium">Word Document</h3>
-          <p className="text-center text-gray-500 max-w-md">
-            {isSigned 
-              ? "Your signatures have been applied to this Word document." 
-              : "Word document preview is not available, but you can still sign this document."}
-          </p>
-          <div className="p-4 border border-dashed border-gray-300 w-full max-w-lg min-h-[300px] flex items-center justify-center relative">
-            {isSigned ? (
-              <div className="text-center">
-                <p className="text-green-600 font-medium mb-2">Document Signed Successfully</p>
-                <p className="text-gray-500">Download to view your signed document</p>
+        <div className="p-4 bg-white border rounded-md flex flex-col items-center justify-center space-y-4 relative min-h-[600px]">
+          {isWordLoading ? (
+            <div className="text-center py-10">
+              <FileText className="w-12 h-12 text-blue-600 mx-auto mb-4 animate-pulse" />
+              <p>Loading Word document...</p>
+            </div>
+          ) : isSigned ? (
+            <div className="text-center py-10 space-y-4">
+              <FileText className="w-16 h-16 text-blue-600 mx-auto" />
+              <h3 className="text-lg font-medium">Word Document</h3>
+              <p className="text-center text-gray-500 max-w-md">
+                Your signatures have been applied to this Word document.
+              </p>
+              <div className="p-4 border border-dashed border-gray-300 w-full max-w-lg min-h-[300px] flex items-center justify-center relative">
+                <div className="text-center">
+                  <p className="text-green-600 font-medium mb-2">Document Signed Successfully</p>
+                  <p className="text-gray-500">Download to view your signed document</p>
+                </div>
+                {renderSignatures()}
               </div>
-            ) : (
-              <div className="text-center">
-                <p className="text-gray-400">Click "Place Signature" to add signatures to this document</p>
-                {signatures && signatures.length > 0 && (
-                  <p className="text-green-600 mt-2">{signatures.length} signature(s) added</p>
-                )}
+            </div>
+          ) : wordError ? (
+            <div className="text-center py-10 space-y-4">
+              <FileText className="w-16 h-16 text-red-600 mx-auto" />
+              <h3 className="text-lg font-medium">Word Document</h3>
+              <p className="text-red-500">{wordError}</p>
+              <div className="p-4 border border-dashed border-gray-300 w-full max-w-lg min-h-[300px] flex items-center justify-center relative">
+                <div className="text-center">
+                  <p className="text-gray-400">Click "Place Signature" to add signatures to this document</p>
+                  {signatures && signatures.length > 0 && (
+                    <p className="text-green-600 mt-2">{signatures.length} signature(s) added</p>
+                  )}
+                </div>
+                {renderSignatures()}
               </div>
-            )}
-            {renderSignatures()}
-          </div>
+            </div>
+          ) : (
+            <div className="w-full relative">
+              <div className="overflow-auto max-h-[600px] relative">
+                <div 
+                  ref={wordContainerRef} 
+                  className="word-document-container relative min-h-[400px] bg-white"
+                />
+                {renderSignatures()}
+              </div>
+            </div>
+          )}
         </div>
       );
     }
