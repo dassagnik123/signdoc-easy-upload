@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload } from "@/components/Upload";
@@ -156,7 +155,7 @@ const Index = () => {
           ctx.font = "24px Arial";
           ctx.fillStyle = "#333333";
           ctx.textAlign = "center";
-          ctx.fillText(`Signed Document: ${file.name}`, canvas.width / 2, 60);
+          ctx.fillText("Signed Document", canvas.width / 2, 60);
           
           // Draw document icon
           ctx.font = "48px Arial";

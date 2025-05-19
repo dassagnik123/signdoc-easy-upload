@@ -166,15 +166,28 @@ export const DocumentViewer = ({
       );
     } else if (fileType.includes("word") || fileType.includes("doc")) {
       return (
-        <div className="p-8 bg-white border rounded-md flex flex-col items-center justify-center space-y-4 relative">
+        <div className="p-8 bg-white border rounded-md flex flex-col items-center justify-center space-y-4 relative min-h-[600px]">
           <FileText className="w-16 h-16 text-blue-600" />
           <h3 className="text-lg font-medium">Word Document</h3>
           <p className="text-center text-gray-500 max-w-md">
-            Word document preview is not available, but you can still sign this document.
-            Click the "Place Signature" button to add your signature.
+            {isSigned 
+              ? "Your signatures have been applied to this Word document." 
+              : "Word document preview is not available, but you can still sign this document."}
           </p>
           <div className="p-4 border border-dashed border-gray-300 w-full max-w-lg min-h-[300px] flex items-center justify-center relative">
-            <p className="text-gray-400">Signature will be placed in this document</p>
+            {isSigned ? (
+              <div className="text-center">
+                <p className="text-green-600 font-medium mb-2">Document Signed Successfully</p>
+                <p className="text-gray-500">Download to view your signed document</p>
+              </div>
+            ) : (
+              <div className="text-center">
+                <p className="text-gray-400">Click "Place Signature" to add signatures to this document</p>
+                {signatures && signatures.length > 0 && (
+                  <p className="text-green-600 mt-2">{signatures.length} signature(s) added</p>
+                )}
+              </div>
+            )}
             {renderSignatures()}
           </div>
         </div>
