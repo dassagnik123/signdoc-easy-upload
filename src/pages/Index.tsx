@@ -7,18 +7,25 @@ import { SignatureDialog } from "@/components/SignatureDialog";
 import { toast } from "sonner";
 import { PDFDocument } from "pdf-lib";
 
+interface SignaturePosition {
+  url: string;
+  x: number;
+  y: number;
+  page: number;
+}
+
 const Index = () => {
   const [file, setFile] = useState<File | null>(null);
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [signatureImage, setSignatureImage] = useState<string | null>(null);
   const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
-  const [signaturePosition, setSignaturePosition] = useState<{ x: number; y: number; page: number } | null>(null);
+  const [signatures, setSignatures] = useState<SignaturePosition[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-
+  
   const handleFileUpload = (uploadedFile: File) => {
     setFile(uploadedFile);
     setSignedPdfUrl(null); // Reset signed PDF if a new document is uploaded
-    setSignaturePosition(null); // Reset signature position
+    setSignatures([]); // Reset signatures array
     toast.success("Document uploaded", {
       description: `${uploadedFile.name} has been uploaded successfully.`,
     });
@@ -40,11 +47,34 @@ const Index = () => {
       return;
     }
     
+    // Add the signature to the array instead of immediately processing the document
+    setSignatures((prev) => [
+      ...prev,
+      {
+        url: signatureImage,
+        x: position.x,
+        y: position.y,
+        page: position.page
+      }
+    ]);
+    
+    toast.success("Signature added", {
+      description: "Click 'Done Signing' when you've placed all signatures.",
+    });
+  };
+
+  const handleFinalizeDocument = async () => {
+    if (!file || signatures.length === 0) {
+      toast.error("Cannot finalize document", {
+        description: "Please add at least one signature to the document.",
+      });
+      return;
+    }
+    
     setIsProcessing(true);
-    setSignaturePosition(position);
     
     try {
-      console.log("Applying signature at position:", position);
+      console.log("Applying signatures:", signatures);
       console.log("File type:", file.type);
       
       // For PDF files
@@ -53,31 +83,34 @@ const Index = () => {
         const arrayBuffer = await file.arrayBuffer();
         const pdfDoc = await PDFDocument.load(arrayBuffer);
         
-        // Create a base64 string of the signature (removing data URL prefix)
-        const signatureBase64 = signatureImage.split(',')[1];
-        
-        // Use Uint8Array instead of Buffer for browser compatibility
-        const signatureBytes = Uint8Array.from(atob(signatureBase64), c => c.charCodeAt(0));
-        
-        // Embed the signature image
-        const signatureEmbed = await pdfDoc.embedPng(signatureBytes);
-        
-        // Get the specified page
-        const pages = pdfDoc.getPages();
-        if (position.page >= pages.length) {
-          throw new Error("Invalid page number");
+        // Process each signature
+        for (const signature of signatures) {
+          // Create a base64 string of the signature (removing data URL prefix)
+          const signatureBase64 = signature.url.split(',')[1];
+          
+          // Use Uint8Array instead of Buffer for browser compatibility
+          const signatureBytes = Uint8Array.from(atob(signatureBase64), c => c.charCodeAt(0));
+          
+          // Embed the signature image
+          const signatureEmbed = await pdfDoc.embedPng(signatureBytes);
+          
+          // Get the specified page
+          const pages = pdfDoc.getPages();
+          if (signature.page >= pages.length) {
+            throw new Error("Invalid page number");
+          }
+          
+          const page = pages[signature.page];
+          const { width, height } = page.getSize();
+          
+          // Draw the signature on the page
+          page.drawImage(signatureEmbed, {
+            x: signature.x,
+            y: height - signature.y - 50, // Flip Y-coordinate (PDF coordinate system starts from bottom-left)
+            width: 200,
+            height: 50,
+          });
         }
-        
-        const page = pages[position.page];
-        const { width, height } = page.getSize();
-        
-        // Draw the signature on the page (adjusting position and size as needed)
-        page.drawImage(signatureEmbed, {
-          x: position.x,
-          y: height - position.y - 50, // Flip Y-coordinate (PDF coordinate system starts from bottom-left)
-          width: 200,
-          height: 50,
-        });
         
         // Save the modified PDF
         const pdfBytes = await pdfDoc.save();
@@ -88,7 +121,7 @@ const Index = () => {
         
         setSignedPdfUrl(url);
       } else {
-        // For other file types like images, create a canvas to composite the signature
+        // For other file types like images, create a canvas to composite the signatures
         const img = new Image();
         img.src = URL.createObjectURL(file);
         
@@ -110,29 +143,9 @@ const Index = () => {
         // Draw the original image
         ctx.drawImage(img, 0, 0, sourceWidth, sourceHeight);
         
-        // Create and draw the signature image
-        const sigImg = new Image();
-        sigImg.src = signatureImage;
-        
-        await new Promise((resolve, reject) => {
-          sigImg.onload = resolve;
-          sigImg.onerror = reject;
-        });
-        
-        // Signature dimensions - adjust as needed
-        const sigWidth = 200;
-        const sigHeight = 50;
-        
-        // Draw the signature at the specified position, making sure it's visible
-        ctx.drawImage(sigImg, 
-          Math.min(position.x, sourceWidth - sigWidth), 
-          Math.min(position.y, sourceHeight - sigHeight), 
-          sigWidth, sigHeight
-        );
-        
         // For Word documents or text files, create a placeholder signed version
-        if (file.type.includes("word") || file.type.startsWith("text/")) {
-          // Create a preview that shows the document with signature overlay
+        if (file.type.includes("word") || file.type.includes("doc") || file.type.startsWith("text/")) {
+          // For Word/text files, create a visual representation with signature shown
           ctx.fillStyle = "rgba(240, 240, 240, 0.8)";
           ctx.fillRect(0, 0, sourceWidth, sourceHeight);
           
@@ -140,11 +153,26 @@ const Index = () => {
           ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
           ctx.textAlign = "center";
           ctx.fillText("DOCUMENT SIGNED", sourceWidth / 2, sourceHeight / 2);
+        }
+        
+        // Draw each signature
+        for (const signature of signatures) {
+          const sigImg = new Image();
+          sigImg.src = signature.url;
           
-          // Draw the signature again so it's clearly visible
+          await new Promise((resolve, reject) => {
+            sigImg.onload = resolve;
+            sigImg.onerror = reject;
+          });
+          
+          // Signature dimensions
+          const sigWidth = 200;
+          const sigHeight = 50;
+          
+          // Draw the signature at the specified position
           ctx.drawImage(sigImg, 
-            Math.min(position.x, sourceWidth - sigWidth), 
-            Math.min(position.y, sourceHeight - sigHeight), 
+            Math.min(signature.x, sourceWidth - sigWidth), 
+            Math.min(signature.y, sourceHeight - sigHeight), 
             sigWidth, sigHeight
           );
         }
@@ -157,13 +185,13 @@ const Index = () => {
         setSignedPdfUrl(url);
       }
       
-      toast.success("Document signed", {
-        description: "Your signature has been applied to the document.",
+      toast.success("Document finalized", {
+        description: "All signatures have been applied to the document.",
       });
     } catch (error) {
-      console.error("Error applying signature:", error);
-      toast.error("Error signing document", {
-        description: "There was a problem applying your signature. Please try again.",
+      console.error("Error applying signatures:", error);
+      toast.error("Error finalizing document", {
+        description: "There was a problem applying your signatures. Please try again.",
       });
     } finally {
       setIsProcessing(false);
@@ -173,9 +201,10 @@ const Index = () => {
   const handleRepositionSignature = () => {
     // Clear the signed URL and allow re-signing
     setSignedPdfUrl(null);
+    setSignatures([]);
     
-    toast.info("Reposition signature", {
-      description: "Click anywhere to place your signature again.",
+    toast.info("Reposition signatures", {
+      description: "Click anywhere to place your signatures again.",
     });
   };
 
@@ -231,13 +260,23 @@ const Index = () => {
                   onClick={() => {
                     setFile(null);
                     setSignedPdfUrl(null);
-                    setSignaturePosition(null);
+                    setSignatures([]);
                   }}
                   className="w-full"
                   disabled={isProcessing}
                 >
                   Upload New Document
                 </Button>
+                
+                {signatureImage && signatures.length > 0 && !signedPdfUrl && (
+                  <Button 
+                    onClick={handleFinalizeDocument}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                    disabled={isProcessing}
+                  >
+                    Finalize Document ({signatures.length} signatures)
+                  </Button>
+                )}
                 
                 {signedPdfUrl && (
                   <>
@@ -255,7 +294,7 @@ const Index = () => {
                       className="w-full"
                       disabled={isProcessing}
                     >
-                      Reposition Signature
+                      Reposition Signatures
                     </Button>
                   </>
                 )}
@@ -273,6 +312,7 @@ const Index = () => {
               onApplySignature={handleApplySignature}
               isSigned={!!signedPdfUrl}
               onRepositionSignature={handleRepositionSignature}
+              signatures={!signedPdfUrl ? signatures : undefined}
             />
           ) : (
             <div className="h-[600px] flex items-center justify-center text-gray-500">
