@@ -121,41 +121,57 @@ const Index = () => {
         
         setSignedPdfUrl(url);
       } else {
-        // For other file types like images, create a canvas to composite the signatures
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        
-        await new Promise((resolve, reject) => {
-          img.onload = resolve;
-          img.onerror = reject;
-        });
-        
+        // For all non-PDF files (including Word documents, text files, and images)
         const canvas = document.createElement('canvas');
-        const sourceWidth = img.naturalWidth || img.width;
-        const sourceHeight = img.naturalHeight || img.height;
         
-        canvas.width = sourceWidth;
-        canvas.height = sourceHeight;
+        // Set a reasonable default size for the document representation
+        canvas.width = 800;
+        canvas.height = 600;
         
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error("Could not get canvas context");
         
-        // Draw the original image
-        ctx.drawImage(img, 0, 0, sourceWidth, sourceHeight);
-        
-        // For Word documents or text files, create a placeholder signed version
-        if (file.type.includes("word") || file.type.includes("doc") || file.type.startsWith("text/")) {
-          // For Word/text files, create a visual representation with signature shown
-          ctx.fillStyle = "rgba(240, 240, 240, 0.8)";
-          ctx.fillRect(0, 0, sourceWidth, sourceHeight);
+        // For image files, draw the actual image as background
+        if (file.type.startsWith("image/")) {
+          const img = new Image();
+          img.src = URL.createObjectURL(file);
           
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+          });
+          
+          // Update canvas dimensions to match image
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          
+          // Draw the original image
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        } else {
+          // For Word documents or text files, create a placeholder
+          ctx.fillStyle = "#f0f0f0";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Add document title
           ctx.font = "24px Arial";
-          ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+          ctx.fillStyle = "#333333";
           ctx.textAlign = "center";
-          ctx.fillText("DOCUMENT SIGNED", sourceWidth / 2, sourceHeight / 2);
+          ctx.fillText(`Signed Document: ${file.name}`, canvas.width / 2, 60);
+          
+          // Draw document icon
+          ctx.font = "48px Arial";
+          ctx.fillStyle = "#4287f5";
+          ctx.textAlign = "center";
+          ctx.fillText("📄", canvas.width / 2, canvas.height / 3);
+          
+          // Add message
+          ctx.font = "18px Arial";
+          ctx.fillStyle = "#666666";
+          ctx.textAlign = "center";
+          ctx.fillText("Document with applied signatures", canvas.width / 2, canvas.height / 3 + 60);
         }
         
-        // Draw each signature
+        // Draw each signature on the document
         for (const signature of signatures) {
           const sigImg = new Image();
           sigImg.src = signature.url;
@@ -169,16 +185,17 @@ const Index = () => {
           const sigWidth = 200;
           const sigHeight = 50;
           
+          // For safety, ensure coordinates are within canvas bounds
+          const x = Math.min(Math.max(signature.x, 0), canvas.width - sigWidth);
+          const y = Math.min(Math.max(signature.y, 0), canvas.height - sigHeight);
+          
           // Draw the signature at the specified position
-          ctx.drawImage(sigImg, 
-            Math.min(signature.x, sourceWidth - sigWidth), 
-            Math.min(signature.y, sourceHeight - sigHeight), 
-            sigWidth, sigHeight
-          );
+          ctx.drawImage(sigImg, x, y, sigWidth, sigHeight);
         }
         
         // Convert canvas to data URL and create a blob URL
-        const dataUrl = canvas.toDataURL(file.type === 'image/jpeg' ? 'image/jpeg' : 'image/png');
+        const mimeType = file.type.startsWith("image/") ? file.type : "image/png";
+        const dataUrl = canvas.toDataURL(mimeType);
         const blob = await (await fetch(dataUrl)).blob();
         const url = URL.createObjectURL(blob);
         
