@@ -170,7 +170,7 @@ export const DocumentViewer = ({
           <FileText className="w-16 h-16 text-blue-600" />
           <h3 className="text-lg font-medium">Word Document</h3>
           <p className="text-center text-gray-500 max-w-md">
-            {file.name} - Word document preview is not available, but you can still sign this document.
+            Word document preview is not available, but you can still sign this document.
             Click the "Place Signature" button to add your signature.
           </p>
           <div className="p-4 border border-dashed border-gray-300 w-full max-w-lg min-h-[300px] flex items-center justify-center relative">
