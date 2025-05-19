@@ -44,18 +44,29 @@ export const DocumentViewer = ({
     setWordError(null);
     
     // If this is a Word document, render it using docx-preview
-    if ((fileType.includes("word") || fileType.includes("doc")) && wordContainerRef.current && !isSigned) {
+    if ((fileType.includes("word") || fileType.includes("doc")) && !isSigned) {
       renderWordDocument();
     }
   }, [file, fileType]);
 
   const renderWordDocument = async () => {
-    if (!wordContainerRef.current || !(fileType.includes("word") || fileType.includes("doc"))) return;
+    if (!(fileType.includes("word") || fileType.includes("doc"))) return;
     
     setIsWordLoading(true);
     setWordError(null);
     
     try {
+      // Make sure the container exists first
+      if (!wordContainerRef.current) {
+        console.error("Word container ref is null");
+        setWordError("Failed to render Word document. You can still sign it.");
+        setIsWordLoading(false);
+        return;
+      }
+      
+      // Clear the container before rendering
+      wordContainerRef.current.innerHTML = '';
+      
       // For files stored as URL (like Blob URLs)
       const response = await fetch(file);
       const blob = await response.blob();
@@ -234,11 +245,20 @@ export const DocumentViewer = ({
             </div>
           ) : (
             <div className="w-full relative">
-              <div className="overflow-auto max-h-[600px] relative">
+              <div className="overflow-auto max-h-[600px] relative mb-4">
                 <div 
                   ref={wordContainerRef} 
-                  className="word-document-container relative min-h-[400px] bg-white"
-                />
+                  className="word-document-container relative min-h-[400px] bg-white p-4"
+                >
+                  {/* Fallback in case docx-preview fails but doesn't throw an error */}
+                  <div className="text-center">
+                    <FileText className="w-16 h-16 text-blue-600 mx-auto mb-2" />
+                    <h3 className="text-lg font-medium">Word Document</h3>
+                    <p className="text-gray-500 mt-2">
+                      Word document preview may not be available, but you can still sign it.
+                    </p>
+                  </div>
+                </div>
                 {renderSignatures()}
               </div>
             </div>
