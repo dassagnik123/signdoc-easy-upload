@@ -69,7 +69,7 @@ export const SignatureDialog = ({
         ctx.fillStyle = "white";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        ctx.font = `48px ${textFont}, cursive`;
+        ctx.font = `48px "${textFont}", cursive`;
         ctx.fillStyle = "black";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -181,7 +181,7 @@ export const SignatureDialog = ({
               
               {textSignature && (
                 <div className="border border-gray-300 rounded-md p-4 bg-white">
-                  <p className={`text-center text-3xl ${textFont === "Arial" ? "font-sans" : textFont === "Times New Roman" ? "font-serif" : ""}`} style={{fontFamily: textFont}}>
+                  <p className={`text-center text-3xl`} style={{fontFamily: textFont}}>
                     {textSignature}
                   </p>
                 </div>

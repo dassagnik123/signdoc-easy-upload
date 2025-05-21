@@ -15,7 +15,6 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Toaster />
         <Sonner />
         <BrowserRouter>
           <Routes>
@@ -24,6 +23,7 @@ const App = () => {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
+        <Toaster />
       </TooltipProvider>
     </QueryClientProvider>
   );
