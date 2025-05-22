@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useRef } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
@@ -28,6 +29,7 @@ interface DocumentViewerProps {
   isSigned: boolean;
   onRepositionSignature?: () => void;
   signatures?: Array<{ url: string; x: number; y: number; page: number }>;
+  onUpdatePlaceholders?: (placeholders: Placeholder[]) => void;
 }
 
 export const DocumentViewer = ({
@@ -38,6 +40,7 @@ export const DocumentViewer = ({
   isSigned,
   onRepositionSignature,
   signatures = [],
+  onUpdatePlaceholders,
 }: DocumentViewerProps) => {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -46,7 +49,7 @@ export const DocumentViewer = ({
   const [isWordLoading, setIsWordLoading] = useState(false);
   const [wordError, setWordError] = useState<string | null>(null);
   
-  // New state for placeholders
+  // Placeholders state for form fields
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
   const [editingPlaceholderId, setEditingPlaceholderId] = useState<string | null>(null);
   const [placeholderText, setPlaceholderText] = useState("");
@@ -65,6 +68,13 @@ export const DocumentViewer = ({
       renderWordDocument();
     }
   }, [file, fileType]);
+
+  // Pass placeholders to parent component when they change
+  useEffect(() => {
+    if (onUpdatePlaceholders) {
+      onUpdatePlaceholders(placeholders);
+    }
+  }, [placeholders, onUpdatePlaceholders]);
 
   const renderWordDocument = async () => {
     if (!(fileType.includes("word") || fileType.includes("doc"))) return;
@@ -202,7 +212,12 @@ export const DocumentViewer = ({
             {placeholder.value ? (
               <div className="text-sm">{placeholder.value}</div>
             ) : (
-              <div className="text-xs text-gray-400 italic">Click to edit</div>
+              <div 
+                className="text-xs text-gray-400 italic cursor-pointer"
+                onClick={() => handleEditPlaceholder(placeholder.id)}
+              >
+                Click to edit
+              </div>
             )}
           </div>
         )}
@@ -497,6 +512,7 @@ export const DocumentViewer = ({
           className={signingMode ? "cursor-crosshair relative" : "relative"}
         >
           {renderContent()}
+          {renderSignatures()}
           {renderPlaceholders()}
         </div>
       </div>

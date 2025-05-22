@@ -17,6 +17,16 @@ interface SignaturePosition {
   page: number;
 }
 
+interface Placeholder {
+  id: string;
+  type: "signature" | "text";
+  label: string;
+  x: number;
+  y: number;
+  page: number;
+  value?: string;
+}
+
 const Index = () => {
   const [file, setFile] = useState<File | null>(null);
   const [signatureOpen, setSignatureOpen] = useState(false);
@@ -24,11 +34,13 @@ const Index = () => {
   const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
   const [signatures, setSignatures] = useState<SignaturePosition[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
   
   const handleFileUpload = (uploadedFile: File) => {
     setFile(uploadedFile);
     setSignedPdfUrl(null); // Reset signed PDF if a new document is uploaded
     setSignatures([]); // Reset signatures array
+    setPlaceholders([]); // Reset placeholders array
     toast.success("Document uploaded", {
       description: `${uploadedFile.name} has been uploaded successfully.`,
     });
@@ -66,10 +78,14 @@ const Index = () => {
     });
   };
 
+  const handleUpdatePlaceholders = (updatedPlaceholders: Placeholder[]) => {
+    setPlaceholders(updatedPlaceholders);
+  };
+
   const handleFinalizeDocument = async () => {
-    if (!file || signatures.length === 0) {
+    if (!file || (signatures.length === 0 && placeholders.length === 0)) {
       toast.error("Cannot finalize document", {
-        description: "Please add at least one signature to the document.",
+        description: "Please add at least one signature or text field to the document.",
       });
       return;
     }
@@ -78,6 +94,7 @@ const Index = () => {
     
     try {
       console.log("Applying signatures:", signatures);
+      console.log("Applying placeholders:", placeholders);
       console.log("File type:", file.type);
       
       // For PDF files
@@ -112,6 +129,25 @@ const Index = () => {
             y: height - signature.y - 50, // Flip Y-coordinate (PDF coordinate system starts from bottom-left)
             width: 200,
             height: 50,
+          });
+        }
+
+        // Process each text placeholder
+        for (const placeholder of placeholders.filter(p => p.type === "text" && p.value)) {
+          const pages = pdfDoc.getPages();
+          if (placeholder.page >= pages.length) {
+            continue; // Skip invalid pages
+          }
+          
+          const page = pages[placeholder.page];
+          const { height } = page.getSize();
+          
+          // Add text to PDF
+          page.drawText(placeholder.value || placeholder.label, {
+            x: placeholder.x,
+            y: height - placeholder.y - 20, // Adjust Y position for PDF coordinates
+            size: 12,
+            color: { r: 0, g: 0, b: 0 },
           });
         }
         
@@ -195,6 +231,23 @@ const Index = () => {
           // Draw the signature at the specified position
           ctx.drawImage(sigImg, x, y, sigWidth, sigHeight);
         }
+
+        // Draw each text field on the document
+        for (const placeholder of placeholders.filter(p => p.type === "text" && p.value)) {
+          // For safety, ensure coordinates are within canvas bounds
+          const x = Math.min(Math.max(placeholder.x, 0), canvas.width - 100);
+          const y = Math.min(Math.max(placeholder.y, 0), canvas.height - 20);
+          
+          // Draw a light background for the text
+          ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+          ctx.fillRect(x, y, 150, 25);
+          
+          // Draw the text
+          ctx.font = "14px Arial";
+          ctx.fillStyle = "#000000";
+          ctx.textAlign = "left";
+          ctx.fillText(placeholder.value || "", x + 5, y + 17);
+        }
         
         // Convert canvas to data URL and create a blob URL
         const mimeType = file.type.startsWith("image/") ? file.type : "image/png";
@@ -206,7 +259,7 @@ const Index = () => {
       }
       
       toast.success("Document finalized", {
-        description: "All signatures have been applied to the document.",
+        description: "All signatures and fields have been applied to the document.",
       });
     } catch (error) {
       console.error("Error applying signatures:", error);
@@ -221,6 +274,7 @@ const Index = () => {
   const handleRepositionSignature = () => {
     // Clear the signed URL and allow re-signing
     setSignedPdfUrl(null);
+    // Note: We're not clearing placeholders to preserve any text fields
     setSignatures([]);
     
     toast.info("Reposition signatures", {
@@ -282,6 +336,7 @@ const Index = () => {
                       setFile(null);
                       setSignedPdfUrl(null);
                       setSignatures([]);
+                      setPlaceholders([]);
                     }}
                     className="w-full"
                     disabled={isProcessing}
@@ -289,13 +344,13 @@ const Index = () => {
                     Upload New Document
                   </Button>
                   
-                  {signatureImage && signatures.length > 0 && !signedPdfUrl && (
+                  {(signatureImage && signatures.length > 0 || placeholders.length > 0) && !signedPdfUrl && (
                     <Button 
                       onClick={handleFinalizeDocument}
                       className="w-full bg-green-600 hover:bg-green-700"
                       disabled={isProcessing}
                     >
-                      Finalize Document ({signatures.length} signatures)
+                      Finalize Document ({signatures.length} signatures, {placeholders.filter(p => p.type === "text" && p.value).length} text fields)
                     </Button>
                   )}
                   
@@ -335,6 +390,7 @@ const Index = () => {
                   isSigned={!!signedPdfUrl}
                   onRepositionSignature={handleRepositionSignature}
                   signatures={!signedPdfUrl ? signatures : undefined}
+                  onUpdatePlaceholders={handleUpdatePlaceholders}
                 />
                 {!signedPdfUrl && file && (
                   <PlaceholderSidebar />
