@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload } from "@/components/Upload";
@@ -335,7 +336,7 @@ const Index = () => {
                   onRepositionSignature={handleRepositionSignature}
                   signatures={!signedPdfUrl ? signatures : undefined}
                 />
-                {!isSigned && file && (
+                {!signedPdfUrl && file && (
                   <PlaceholderSidebar />
                 )}
               </>
