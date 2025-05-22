@@ -3,8 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Upload } from "@/components/Upload";
 import { DocumentViewer } from "@/components/DocumentViewer";
 import { SignatureDialog } from "@/components/SignatureDialog";
+import { PlaceholderSidebar } from "@/components/PlaceholderSidebar";
 import { toast } from "sonner";
 import { PDFDocument } from "pdf-lib";
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
 
 interface SignaturePosition {
   url: string;
@@ -240,110 +243,117 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col gap-6 p-6 bg-gray-50">
-      <header className="text-center">
-        <h1 className="text-3xl font-bold mb-2">Document Signing App</h1>
-        <p className="text-gray-600">Upload a document and add your digital signature</p>
-      </header>
+    <DndProvider backend={HTML5Backend}>
+      <div className="min-h-screen flex flex-col gap-6 p-6 bg-gray-50">
+        <header className="text-center">
+          <h1 className="text-3xl font-bold mb-2">Document Signing App</h1>
+          <p className="text-gray-600">Upload a document and add your digital signature</p>
+        </header>
 
-      <div className="flex flex-col md:flex-row gap-6">
-        <div className="w-full md:w-1/3 bg-white p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Document Controls</h2>
-          
-          {!file && (
-            <Upload onFileUpload={handleFileUpload} />
-          )}
+        <div className="flex flex-col md:flex-row gap-6">
+          <div className="w-full md:w-1/3 bg-white p-6 rounded-lg shadow">
+            <h2 className="text-xl font-semibold mb-4">Document Controls</h2>
+            
+            {!file && (
+              <Upload onFileUpload={handleFileUpload} />
+            )}
 
-          {file && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-medium mb-1">Current Document</h3>
-                <p className="text-sm text-gray-600 truncate">{file.name}</p>
-                <p className="text-xs text-gray-500">Type: {file.type || "Unknown"}</p>
-              </div>
-              
-              <div className="flex flex-col gap-2">
-                <Button 
-                  onClick={() => setSignatureOpen(true)}
-                  className="w-full"
-                  disabled={isProcessing}
-                >
-                  {signatureImage ? "Change Signature" : "Create Signature"}
-                </Button>
+            {file && (
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-medium mb-1">Current Document</h3>
+                  <p className="text-sm text-gray-600 truncate">{file.name}</p>
+                  <p className="text-xs text-gray-500">Type: {file.type || "Unknown"}</p>
+                </div>
                 
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    setFile(null);
-                    setSignedPdfUrl(null);
-                    setSignatures([]);
-                  }}
-                  className="w-full"
-                  disabled={isProcessing}
-                >
-                  Upload New Document
-                </Button>
-                
-                {signatureImage && signatures.length > 0 && !signedPdfUrl && (
+                <div className="flex flex-col gap-2">
                   <Button 
-                    onClick={handleFinalizeDocument}
-                    className="w-full bg-green-600 hover:bg-green-700"
+                    onClick={() => setSignatureOpen(true)}
+                    className="w-full"
                     disabled={isProcessing}
                   >
-                    Finalize Document ({signatures.length} signatures)
+                    {signatureImage ? "Change Signature" : "Create Signature"}
                   </Button>
-                )}
-                
-                {signedPdfUrl && (
-                  <>
+                  
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setFile(null);
+                      setSignedPdfUrl(null);
+                      setSignatures([]);
+                    }}
+                    className="w-full"
+                    disabled={isProcessing}
+                  >
+                    Upload New Document
+                  </Button>
+                  
+                  {signatureImage && signatures.length > 0 && !signedPdfUrl && (
                     <Button 
-                      onClick={handleDownload}
+                      onClick={handleFinalizeDocument}
                       className="w-full bg-green-600 hover:bg-green-700"
                       disabled={isProcessing}
                     >
-                      Download Signed Document
+                      Finalize Document ({signatures.length} signatures)
                     </Button>
-                    
-                    <Button
-                      variant="outline"
-                      onClick={handleRepositionSignature}
-                      className="w-full"
-                      disabled={isProcessing}
-                    >
-                      Reposition Signatures
-                    </Button>
-                  </>
-                )}
+                  )}
+                  
+                  {signedPdfUrl && (
+                    <>
+                      <Button 
+                        onClick={handleDownload}
+                        className="w-full bg-green-600 hover:bg-green-700"
+                        disabled={isProcessing}
+                      >
+                        Download Signed Document
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        onClick={handleRepositionSignature}
+                        className="w-full"
+                        disabled={isProcessing}
+                      >
+                        Reposition Signatures
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          <div className="w-full md:w-2/3 flex flex-col bg-white rounded-lg shadow overflow-hidden">
+            {(file || signedPdfUrl) ? (
+              <>
+                <DocumentViewer 
+                  file={signedPdfUrl || URL.createObjectURL(file!)} 
+                  fileType={file?.type || ""}
+                  signatureImage={signatureImage}
+                  onApplySignature={handleApplySignature}
+                  isSigned={!!signedPdfUrl}
+                  onRepositionSignature={handleRepositionSignature}
+                  signatures={!signedPdfUrl ? signatures : undefined}
+                />
+                {!isSigned && file && (
+                  <PlaceholderSidebar />
+                )}
+              </>
+            ) : (
+              <div className="h-[600px] flex items-center justify-center text-gray-500">
+                Upload a document to get started
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="w-full md:w-2/3 bg-white rounded-lg shadow overflow-hidden">
-          {(file || signedPdfUrl) ? (
-            <DocumentViewer 
-              file={signedPdfUrl || URL.createObjectURL(file!)} 
-              fileType={file?.type || ""}
-              signatureImage={signatureImage}
-              onApplySignature={handleApplySignature}
-              isSigned={!!signedPdfUrl}
-              onRepositionSignature={handleRepositionSignature}
-              signatures={!signedPdfUrl ? signatures : undefined}
-            />
-          ) : (
-            <div className="h-[600px] flex items-center justify-center text-gray-500">
-              Upload a document to get started
-            </div>
-          )}
-        </div>
+        <SignatureDialog 
+          open={signatureOpen} 
+          onOpenChange={setSignatureOpen}
+          onSignatureCreate={handleSignatureCreate}
+        />
       </div>
-
-      <SignatureDialog 
-        open={signatureOpen} 
-        onOpenChange={setSignatureOpen}
-        onSignatureCreate={handleSignatureCreate}
-      />
-    </div>
+    </DndProvider>
   );
 };
 

@@ -5,9 +5,20 @@ import "react-pdf/dist/esm/Page/TextLayer.css";
 import { Button } from "@/components/ui/button";
 import { Signature, MoveHorizontal, FileText } from "lucide-react";
 import { renderAsync } from "docx-preview";
+import { useDrop } from "react-dnd";
 
 // Set the worker source for react-pdf
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+
+interface Placeholder {
+  id: string;
+  type: "signature" | "text";
+  label: string;
+  x: number;
+  y: number;
+  page: number;
+  value?: string;
+}
 
 interface DocumentViewerProps {
   file: string;
@@ -34,6 +45,12 @@ export const DocumentViewer = ({
   const [signingMode, setSigningMode] = useState(false);
   const [isWordLoading, setIsWordLoading] = useState(false);
   const [wordError, setWordError] = useState<string | null>(null);
+  
+  // New state for placeholders
+  const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
+  const [editingPlaceholderId, setEditingPlaceholderId] = useState<string | null>(null);
+  const [placeholderText, setPlaceholderText] = useState("");
+  
   const documentRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const wordContainerRef = useRef<HTMLDivElement>(null);
@@ -157,6 +174,67 @@ export const DocumentViewer = ({
     ));
   };
 
+  const renderPlaceholders = () => {
+    // Filter placeholders for current page
+    const currentPagePlaceholders = placeholders.filter(
+      p => p.page === pageNumber - 1
+    );
+    
+    return currentPagePlaceholders.map(placeholder => (
+      <div
+        key={placeholder.id}
+        className="absolute border-2 border-dashed border-blue-400 p-2 bg-blue-50 bg-opacity-30 min-w-[100px] min-h-[40px]"
+        style={{
+          left: `${placeholder.x * scale}px`,
+          top: `${placeholder.y * scale}px`,
+          zIndex: 15,
+        }}
+      >
+        {placeholder.type === "signature" && placeholder.value ? (
+          <img
+            src={placeholder.value}
+            alt="Signature"
+            className="max-w-[200px] max-h-[50px] object-contain"
+          />
+        ) : (
+          <div className="flex flex-col">
+            <div className="text-xs text-blue-600 font-medium">{placeholder.label}</div>
+            {placeholder.value ? (
+              <div className="text-sm">{placeholder.value}</div>
+            ) : (
+              <div className="text-xs text-gray-400 italic">Click to edit</div>
+            )}
+          </div>
+        )}
+        
+        {/* Edit/Delete controls */}
+        <div className="absolute top-0 right-0 bg-white rounded-bl-md border border-gray-200 flex">
+          {placeholder.type === "text" && (
+            <button 
+              onClick={() => handleEditPlaceholder(placeholder.id)}
+              className="p-1 text-blue-500 hover:bg-blue-50"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            </button>
+          )}
+          <button 
+            onClick={() => handleDeletePlaceholder(placeholder.id)}
+            className="p-1 text-red-500 hover:bg-red-50"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18"></path>
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    ));
+  };
+
   const renderContent = () => {
     if (fileType.startsWith("application/pdf")) {
       return (
@@ -272,6 +350,73 @@ export const DocumentViewer = ({
     );
   };
 
+  const [{ isOver }, drop] = useDrop(() => ({
+    accept: "PLACEHOLDER",
+    drop: (item: { type: "signature" | "text"; label: string }, monitor) => {
+      const dropOffset = monitor.getClientOffset();
+      if (dropOffset && contentRef.current) {
+        const contentRect = contentRef.current.getBoundingClientRect();
+        const x = dropOffset.x - contentRect.left;
+        const y = dropOffset.y - contentRect.top;
+        
+        addPlaceholder(item.type, item.label, x / scale, y / scale);
+      }
+    },
+    collect: (monitor) => ({
+      isOver: !!monitor.isOver(),
+    }),
+  }));
+
+  // Function to add a new placeholder
+  const addPlaceholder = (type: "signature" | "text", label: string, x: number, y: number) => {
+    const newPlaceholder: Placeholder = {
+      id: `placeholder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      label,
+      x,
+      y,
+      page: pageNumber - 1,
+      value: type === "signature" && signatureImage ? signatureImage : "",
+    };
+    
+    setPlaceholders(prev => [...prev, newPlaceholder]);
+    
+    // If it's a signature placeholder and we have a signature, apply it
+    if (type === "signature" && signatureImage) {
+      onApplySignature({ x, y, page: pageNumber - 1 });
+    }
+  };
+
+  const handleEditPlaceholder = (id: string) => {
+    const placeholder = placeholders.find(p => p.id === id);
+    if (placeholder) {
+      setEditingPlaceholderId(id);
+      setPlaceholderText(placeholder.value || "");
+    }
+  };
+
+  const handleSavePlaceholder = () => {
+    if (editingPlaceholderId) {
+      setPlaceholders(prev => 
+        prev.map(p => 
+          p.id === editingPlaceholderId 
+            ? { ...p, value: placeholderText } 
+            : p
+        )
+      );
+      setEditingPlaceholderId(null);
+      setPlaceholderText("");
+    }
+  };
+
+  const handleDeletePlaceholder = (id: string) => {
+    setPlaceholders(prev => prev.filter(p => p.id !== id));
+    if (editingPlaceholderId === id) {
+      setEditingPlaceholderId(null);
+      setPlaceholderText("");
+    }
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="bg-gray-100 p-3 flex flex-wrap gap-2 justify-between items-center">
@@ -338,22 +483,52 @@ export const DocumentViewer = ({
 
       <div
         className={`flex-1 overflow-auto p-4 flex justify-center ${
-          signingMode ? "cursor-crosshair" : ""
+          signingMode ? "cursor-crosshair" : isOver ? "bg-blue-50" : ""
         }`}
         ref={documentRef}
       >
         <div 
-          ref={contentRef}
+          ref={(node) => {
+            // Combine the drop ref with the content ref
+            drop(node);
+            contentRef.current = node;
+          }}
           onClick={signingMode ? handlePageClick : undefined}
           className={signingMode ? "cursor-crosshair relative" : "relative"}
         >
           {renderContent()}
+          {renderPlaceholders()}
         </div>
       </div>
 
       {signingMode && (
         <div className="bg-blue-50 p-3 text-sm text-blue-700">
           Click anywhere on the document to place your signature. Click "Done Signing" when finished.
+        </div>
+      )}
+      
+      {/* Edit placeholder modal */}
+      {editingPlaceholderId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-4 rounded-md shadow-lg max-w-md w-full">
+            <h3 className="text-lg font-medium mb-3">
+              Edit {placeholders.find(p => p.id === editingPlaceholderId)?.label}
+            </h3>
+            <textarea
+              value={placeholderText}
+              onChange={(e) => setPlaceholderText(e.target.value)}
+              className="w-full border border-gray-300 rounded-md p-2 mb-3"
+              rows={3}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditingPlaceholderId(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSavePlaceholder}>
+                Save
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
