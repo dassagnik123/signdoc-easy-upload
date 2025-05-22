@@ -6,7 +6,7 @@ import { DocumentViewer } from "@/components/DocumentViewer";
 import { SignatureDialog } from "@/components/SignatureDialog";
 import { PlaceholderSidebar } from "@/components/PlaceholderSidebar";
 import { toast } from "sonner";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, rgb } from "pdf-lib";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 
@@ -142,12 +142,12 @@ const Index = () => {
           const page = pages[placeholder.page];
           const { height } = page.getSize();
           
-          // Add text to PDF
+          // Add text to PDF - Fix the color format to use rgb() from pdf-lib
           page.drawText(placeholder.value || placeholder.label, {
             x: placeholder.x,
             y: height - placeholder.y - 20, // Adjust Y position for PDF coordinates
             size: 12,
-            color: { r: 0, g: 0, b: 0 },
+            color: rgb(0, 0, 0), // Using the rgb function from pdf-lib instead of {r:0, g:0, b:0}
           });
         }
         
