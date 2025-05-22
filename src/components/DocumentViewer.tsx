@@ -30,6 +30,9 @@ interface DocumentViewerProps {
   signatures?: Array<{ url: string; x: number; y: number; page: number }>;
   onUpdatePlaceholders?: (placeholders: Placeholder[]) => void;
   onDeletePlaceholder?: (placeholderId: string) => void;
+  onPlaceholderDragStart?: (placeholderId: string) => void;
+  onPlaceholderMove?: (placeholderId: string, newX: number, newY: number) => void;
+  draggedPlaceholderId?: string | null;
   disableClickToSign?: boolean;
 }
 
@@ -42,6 +45,9 @@ export const DocumentViewer = ({
   signatures = [],
   onUpdatePlaceholders,
   onDeletePlaceholder,
+  onPlaceholderDragStart,
+  onPlaceholderMove,
+  draggedPlaceholderId,
   disableClickToSign = false,
 }: DocumentViewerProps) => {
   const [numPages, setNumPages] = useState<number | null>(null);
@@ -50,6 +56,7 @@ export const DocumentViewer = ({
   const [signingMode, setSigningMode] = useState(false);
   const [isWordLoading, setIsWordLoading] = useState(false);
   const [wordError, setWordError] = useState<string | null>(null);
+  const [isDraggingPlaceholder, setIsDraggingPlaceholder] = useState(false);
   
   // Placeholders state for form fields
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
@@ -154,6 +161,50 @@ export const DocumentViewer = ({
     });
   };
 
+  const handlePlaceholderMouseDown = (e: React.MouseEvent, placeholderId: string) => {
+    // Don't start dragging if we're clicking on a button or control
+    if ((e.target as HTMLElement).closest('button')) {
+      return;
+    }
+    
+    setIsDraggingPlaceholder(true);
+    if (onPlaceholderDragStart) {
+      onPlaceholderDragStart(placeholderId);
+    }
+    
+    // Prevent text selection during drag
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDraggingPlaceholder || !draggedPlaceholderId || !contentRef.current || !onPlaceholderMove) return;
+    
+    const rect = contentRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / scale;
+    const y = (e.clientY - rect.top) / scale;
+    
+    onPlaceholderMove(draggedPlaceholderId, x, y);
+  };
+
+  const handleMouseUp = () => {
+    setIsDraggingPlaceholder(false);
+  };
+
+  // Add event listeners for mouse up
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      handleMouseUp();
+    };
+    
+    if (isDraggingPlaceholder) {
+      window.addEventListener('mouseup', handleGlobalMouseUp);
+    }
+    
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isDraggingPlaceholder]);
+
   const renderSignatures = () => {
     if (!signatures || signatures.length === 0) return null;
 
@@ -206,12 +257,13 @@ export const DocumentViewer = ({
     return currentPagePlaceholders.map(placeholder => (
       <div
         key={placeholder.id}
-        className="absolute border-2 border-dashed border-blue-400 p-2 bg-blue-50 bg-opacity-30 min-w-[100px] min-h-[40px]"
+        className={`absolute border-2 border-dashed ${draggedPlaceholderId === placeholder.id ? 'border-green-500' : 'border-blue-400'} p-2 bg-blue-50 bg-opacity-30 min-w-[100px] min-h-[40px] cursor-move`}
         style={{
           left: `${placeholder.x * scale}px`,
           top: `${placeholder.y * scale}px`,
           zIndex: 15,
         }}
+        onMouseDown={(e) => handlePlaceholderMouseDown(e, placeholder.id)}
       >
         {placeholder.type === "signature" && placeholder.value ? (
           <img
@@ -403,7 +455,7 @@ export const DocumentViewer = ({
       label,
       x,
       y,
-      page: pageNumber - 1, // Store 0-based page index
+      page: pageNumber - 1, // Store 0-based page index - this is crucial for correct page tracking
       value: type === "signature" && signatureImage ? signatureImage : "",
     };
     
@@ -411,7 +463,11 @@ export const DocumentViewer = ({
     
     // If it's a signature placeholder and we have a signature, apply it
     if (type === "signature" && signatureImage) {
-      onApplySignature({ x, y, page: pageNumber - 1 }); // Use 0-based page index
+      onApplySignature({ 
+        x, 
+        y, 
+        page: pageNumber - 1 // Use 0-based page index - this is crucial
+      });
     }
   };
 
@@ -475,10 +531,6 @@ export const DocumentViewer = ({
             +
           </Button>
         </div>
-
-        <div className="flex items-center gap-2">
-          {/* Removed the Place Signature button since we're using drag-and-drop only */}
-        </div>
       </div>
 
       <div
@@ -486,6 +538,8 @@ export const DocumentViewer = ({
           isOver ? "bg-blue-50" : ""
         }`}
         ref={documentRef}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
       >
         <div 
           ref={(node) => {
@@ -494,9 +548,9 @@ export const DocumentViewer = ({
             contentRef.current = node;
           }}
           className="relative"
+          onClick={handlePageClick}
         >
           {renderContent()}
-          {renderSignatures()}
           {renderPlaceholders()}
         </div>
       </div>

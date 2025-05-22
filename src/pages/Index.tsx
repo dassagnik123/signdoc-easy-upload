@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload } from "@/components/Upload";
@@ -35,6 +34,7 @@ const Index = () => {
   const [signatures, setSignatures] = useState<SignaturePosition[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
+  const [draggedPlaceholderId, setDraggedPlaceholderId] = useState<string | null>(null);
   
   const handleFileUpload = (uploadedFile: File) => {
     setFile(uploadedFile);
@@ -72,14 +72,14 @@ const Index = () => {
       return;
     }
     
-    // Add the signature to the array
+    // Add the signature to the array - ensure we use the correct page number
     setSignatures((prev) => [
       ...prev,
       {
         url: signatureImage,
         x: position.x,
         y: position.y,
-        page: position.page
+        page: position.page // This now correctly uses the page from the position parameter
       }
     ]);
     
@@ -104,13 +104,41 @@ const Index = () => {
         handleApplySignature({
           x: placeholder.x,
           y: placeholder.y,
-          page: placeholder.page
+          page: placeholder.page // This passes the correct page number from the placeholder
         });
       });
     }
   };
 
-  // When a placeholder is deleted, we need to remove any associated signatures
+  // Placeholder movement functionality
+  const handlePlaceholderDragStart = (placeholderId: string) => {
+    setDraggedPlaceholderId(placeholderId);
+  };
+
+  const handlePlaceholderMove = (id: string, newX: number, newY: number) => {
+    setPlaceholders(prev => 
+      prev.map(p => 
+        p.id === id 
+          ? { ...p, x: newX, y: newY } 
+          : p
+      )
+    );
+
+    // Also update any associated signature
+    const placeholder = placeholders.find(p => p.id === id);
+    if (placeholder && placeholder.type === "signature" && placeholder.value) {
+      setSignatures(prev => 
+        prev.map(sig => 
+          (sig.page === placeholder.page && 
+           Math.abs(sig.x - placeholder.x) < 5 && 
+           Math.abs(sig.y - placeholder.y) < 5)
+            ? { ...sig, x: newX, y: newY }
+            : sig
+        )
+      );
+    }
+  };
+
   const handlePlaceholderDelete = (placeholderId: string) => {
     // Find the placeholder that was deleted
     const deletedPlaceholder = placeholders.find(p => p.id === placeholderId);
@@ -324,7 +352,7 @@ const Index = () => {
     setSignedPdfUrl(null);
     
     toast.info("Reposition signatures", {
-      description: "You can now reposition your signatures by adding new placeholders.",
+      description: "You can now reposition your signatures by dragging the placeholders.",
     });
   };
 
@@ -423,15 +451,6 @@ const Index = () => {
                       >
                         Download Signed Document
                       </Button>
-                      
-                      <Button
-                        variant="outline"
-                        onClick={handleRepositionSignature}
-                        className="w-full"
-                        disabled={isProcessing}
-                      >
-                        Reposition Signatures
-                      </Button>
                     </>
                   )}
                 </div>
@@ -451,6 +470,9 @@ const Index = () => {
                   signatures={!signedPdfUrl ? signatures : undefined}
                   onUpdatePlaceholders={handleUpdatePlaceholders}
                   onDeletePlaceholder={handlePlaceholderDelete}
+                  onPlaceholderDragStart={handlePlaceholderDragStart}
+                  onPlaceholderMove={handlePlaceholderMove}
+                  draggedPlaceholderId={draggedPlaceholderId}
                   disableClickToSign={true}
                 />
                 {!signedPdfUrl && file && (
