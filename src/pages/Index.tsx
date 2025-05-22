@@ -54,7 +54,6 @@ const Index = () => {
     });
   };
 
-  // Modify this function to apply signature to placeholder instead of by clicking
   const handleApplySignature = async (position: { x: number; y: number; page: number }) => {
     if (!file || !signatureImage) {
       toast.error("Error signing document", {
@@ -108,6 +107,26 @@ const Index = () => {
           page: placeholder.page
         });
       });
+    }
+  };
+
+  // When a placeholder is deleted, we need to remove any associated signatures
+  const handlePlaceholderDelete = (placeholderId: string) => {
+    // Find the placeholder that was deleted
+    const deletedPlaceholder = placeholders.find(p => p.id === placeholderId);
+    
+    if (deletedPlaceholder) {
+      // Remove the placeholder from state
+      setPlaceholders(prev => prev.filter(p => p.id !== placeholderId));
+      
+      // If it was a signature placeholder, also remove any signatures at that position
+      if (deletedPlaceholder.type === "signature") {
+        setSignatures(prev => prev.filter(sig => 
+          !(sig.x === deletedPlaceholder.x && 
+            sig.y === deletedPlaceholder.y && 
+            sig.page === deletedPlaceholder.page)
+        ));
+      }
     }
   };
 
@@ -303,11 +322,9 @@ const Index = () => {
   const handleRepositionSignature = () => {
     // Clear the signed URL and allow re-signing
     setSignedPdfUrl(null);
-    // Note: We're not clearing placeholders to preserve any text fields
-    setSignatures([]);
     
     toast.info("Reposition signatures", {
-      description: "Click anywhere to place your signatures again.",
+      description: "You can now reposition your signatures by adding new placeholders.",
     });
   };
 
@@ -431,10 +448,10 @@ const Index = () => {
                   signatureImage={signatureImage}
                   onApplySignature={handleApplySignature}
                   isSigned={!!signedPdfUrl}
-                  onRepositionSignature={handleRepositionSignature}
                   signatures={!signedPdfUrl ? signatures : undefined}
                   onUpdatePlaceholders={handleUpdatePlaceholders}
-                  disableClickToSign={true} // New prop to disable clicking on document to place signature
+                  onDeletePlaceholder={handlePlaceholderDelete}
+                  disableClickToSign={true}
                 />
                 {!signedPdfUrl && file && (
                   <PlaceholderSidebar />

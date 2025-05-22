@@ -1,4 +1,3 @@
-
 import { useEffect, useState, useRef } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
@@ -30,7 +29,8 @@ interface DocumentViewerProps {
   onRepositionSignature?: () => void;
   signatures?: Array<{ url: string; x: number; y: number; page: number }>;
   onUpdatePlaceholders?: (placeholders: Placeholder[]) => void;
-  disableClickToSign?: boolean; // New prop to disable click-to-sign functionality
+  onDeletePlaceholder?: (placeholderId: string) => void;
+  disableClickToSign?: boolean;
 }
 
 export const DocumentViewer = ({
@@ -39,10 +39,10 @@ export const DocumentViewer = ({
   signatureImage,
   onApplySignature,
   isSigned,
-  onRepositionSignature,
   signatures = [],
   onUpdatePlaceholders,
-  disableClickToSign = false, // Default to false for backward compatibility
+  onDeletePlaceholder,
+  disableClickToSign = false,
 }: DocumentViewerProps) => {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -135,7 +135,7 @@ export const DocumentViewer = ({
   };
 
   const handlePageClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // If click-to-sign is disabled or not in signing mode or no signature, don't do anything
+    // This function is kept for backward compatibility, but with disableClickToSign=true, it won't do anything
     if (disableClickToSign || !signingMode || !signatureImage) return;
 
     // Get the bounding rectangle of the clicked element
@@ -145,8 +145,6 @@ export const DocumentViewer = ({
     // Calculate the position relative to the document viewer
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-
-    console.log("Click position:", { x, y, scale, rect });
 
     // Apply signature at the calculated position
     onApplySignature({
@@ -185,6 +183,18 @@ export const DocumentViewer = ({
         />
       </div>
     ));
+  };
+
+  const handleDeletePlaceholder = (id: string) => {
+    setPlaceholders(prev => prev.filter(p => p.id !== id));
+    if (onDeletePlaceholder) {
+      onDeletePlaceholder(id);
+    }
+    
+    if (editingPlaceholderId === id) {
+      setEditingPlaceholderId(null);
+      setPlaceholderText("");
+    }
   };
 
   const renderPlaceholders = () => {
@@ -427,14 +437,6 @@ export const DocumentViewer = ({
     }
   };
 
-  const handleDeletePlaceholder = (id: string) => {
-    setPlaceholders(prev => prev.filter(p => p.id !== id));
-    if (editingPlaceholderId === id) {
-      setEditingPlaceholderId(null);
-      setPlaceholderText("");
-    }
-  };
-
   return (
     <div className="flex flex-col h-full">
       <div className="bg-gray-100 p-3 flex flex-wrap gap-2 justify-between items-center">
@@ -475,33 +477,13 @@ export const DocumentViewer = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {signatureImage && !disableClickToSign && (
-            <Button
-              size="sm"
-              onClick={() => setSigningMode(!signingMode)}
-              className={signingMode ? "bg-green-600" : ""}
-            >
-              <Signature className="h-4 w-4 mr-2" />
-              {signingMode ? "Done Signing" : "Place Signature"}
-            </Button>
-          )}
-          
-          {signatureImage && isSigned && onRepositionSignature && (
-            <Button
-              size="sm"
-              onClick={onRepositionSignature}
-              variant="outline"
-            >
-              <MoveHorizontal className="h-4 w-4 mr-2" />
-              Reposition Signatures
-            </Button>
-          )}
+          {/* Removed the Place Signature button since we're using drag-and-drop only */}
         </div>
       </div>
 
       <div
         className={`flex-1 overflow-auto p-4 flex justify-center ${
-          signingMode && !disableClickToSign ? "cursor-crosshair" : isOver ? "bg-blue-50" : ""
+          isOver ? "bg-blue-50" : ""
         }`}
         ref={documentRef}
       >
@@ -511,20 +493,13 @@ export const DocumentViewer = ({
             drop(node);
             contentRef.current = node;
           }}
-          onClick={signingMode && !disableClickToSign ? handlePageClick : undefined}
-          className={signingMode && !disableClickToSign ? "cursor-crosshair relative" : "relative"}
+          className="relative"
         >
           {renderContent()}
           {renderSignatures()}
           {renderPlaceholders()}
         </div>
       </div>
-
-      {signingMode && !disableClickToSign && (
-        <div className="bg-blue-50 p-3 text-sm text-blue-700">
-          Click anywhere on the document to place your signature. Click "Done Signing" when finished.
-        </div>
-      )}
       
       {/* Edit placeholder modal */}
       {editingPlaceholderId && (
