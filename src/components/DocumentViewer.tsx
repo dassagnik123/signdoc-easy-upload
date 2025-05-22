@@ -30,6 +30,7 @@ interface DocumentViewerProps {
   onRepositionSignature?: () => void;
   signatures?: Array<{ url: string; x: number; y: number; page: number }>;
   onUpdatePlaceholders?: (placeholders: Placeholder[]) => void;
+  disableClickToSign?: boolean; // New prop to disable click-to-sign functionality
 }
 
 export const DocumentViewer = ({
@@ -41,6 +42,7 @@ export const DocumentViewer = ({
   onRepositionSignature,
   signatures = [],
   onUpdatePlaceholders,
+  disableClickToSign = false, // Default to false for backward compatibility
 }: DocumentViewerProps) => {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -133,7 +135,8 @@ export const DocumentViewer = ({
   };
 
   const handlePageClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!signingMode || !signatureImage) return;
+    // If click-to-sign is disabled or not in signing mode or no signature, don't do anything
+    if (disableClickToSign || !signingMode || !signatureImage) return;
 
     // Get the bounding rectangle of the clicked element
     const rect = contentRef.current?.getBoundingClientRect();
@@ -149,7 +152,7 @@ export const DocumentViewer = ({
     onApplySignature({
       x: x / scale,
       y: y / scale,
-      page: pageNumber - 1
+      page: pageNumber - 1 // Page index should be 0-based
     });
   };
 
@@ -158,7 +161,7 @@ export const DocumentViewer = ({
 
     // Filter signatures for the current page
     const currentPageSignatures = signatures.filter(
-      (sig) => sig.page === pageNumber - 1
+      (sig) => sig.page === pageNumber - 1 // Match the current page (0-based index)
     );
 
     return currentPageSignatures.map((sig, index) => (
@@ -187,7 +190,7 @@ export const DocumentViewer = ({
   const renderPlaceholders = () => {
     // Filter placeholders for current page
     const currentPagePlaceholders = placeholders.filter(
-      p => p.page === pageNumber - 1
+      p => p.page === pageNumber - 1 // Match current page (0-based index)
     );
     
     return currentPagePlaceholders.map(placeholder => (
@@ -390,7 +393,7 @@ export const DocumentViewer = ({
       label,
       x,
       y,
-      page: pageNumber - 1,
+      page: pageNumber - 1, // Store 0-based page index
       value: type === "signature" && signatureImage ? signatureImage : "",
     };
     
@@ -398,7 +401,7 @@ export const DocumentViewer = ({
     
     // If it's a signature placeholder and we have a signature, apply it
     if (type === "signature" && signatureImage) {
-      onApplySignature({ x, y, page: pageNumber - 1 });
+      onApplySignature({ x, y, page: pageNumber - 1 }); // Use 0-based page index
     }
   };
 
@@ -472,7 +475,7 @@ export const DocumentViewer = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {signatureImage && (
+          {signatureImage && !disableClickToSign && (
             <Button
               size="sm"
               onClick={() => setSigningMode(!signingMode)}
@@ -498,7 +501,7 @@ export const DocumentViewer = ({
 
       <div
         className={`flex-1 overflow-auto p-4 flex justify-center ${
-          signingMode ? "cursor-crosshair" : isOver ? "bg-blue-50" : ""
+          signingMode && !disableClickToSign ? "cursor-crosshair" : isOver ? "bg-blue-50" : ""
         }`}
         ref={documentRef}
       >
@@ -508,8 +511,8 @@ export const DocumentViewer = ({
             drop(node);
             contentRef.current = node;
           }}
-          onClick={signingMode ? handlePageClick : undefined}
-          className={signingMode ? "cursor-crosshair relative" : "relative"}
+          onClick={signingMode && !disableClickToSign ? handlePageClick : undefined}
+          className={signingMode && !disableClickToSign ? "cursor-crosshair relative" : "relative"}
         >
           {renderContent()}
           {renderSignatures()}
@@ -517,7 +520,7 @@ export const DocumentViewer = ({
         </div>
       </div>
 
-      {signingMode && (
+      {signingMode && !disableClickToSign && (
         <div className="bg-blue-50 p-3 text-sm text-blue-700">
           Click anywhere on the document to place your signature. Click "Done Signing" when finished.
         </div>

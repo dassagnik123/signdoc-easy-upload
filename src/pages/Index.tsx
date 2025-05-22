@@ -54,6 +54,7 @@ const Index = () => {
     });
   };
 
+  // Modify this function to apply signature to placeholder instead of by clicking
   const handleApplySignature = async (position: { x: number; y: number; page: number }) => {
     if (!file || !signatureImage) {
       toast.error("Error signing document", {
@@ -62,7 +63,17 @@ const Index = () => {
       return;
     }
     
-    // Add the signature to the array instead of immediately processing the document
+    // Check if a signature already exists at this position and page
+    const existingSignatureIndex = signatures.findIndex(
+      sig => sig.x === position.x && sig.y === position.y && sig.page === position.page
+    );
+
+    // If a signature already exists at this position, don't add another one
+    if (existingSignatureIndex !== -1) {
+      return;
+    }
+    
+    // Add the signature to the array
     setSignatures((prev) => [
       ...prev,
       {
@@ -80,6 +91,24 @@ const Index = () => {
 
   const handleUpdatePlaceholders = (updatedPlaceholders: Placeholder[]) => {
     setPlaceholders(updatedPlaceholders);
+    
+    // Apply signature to any signature placeholders if we have a signature
+    if (signatureImage) {
+      const signaturePlaceholders = updatedPlaceholders.filter(p => p.type === "signature" && !p.value);
+      
+      // For each signature placeholder without a value, add our signature
+      signaturePlaceholders.forEach(placeholder => {
+        // Update the placeholder value
+        placeholder.value = signatureImage;
+        
+        // Also add to signatures array for rendering
+        handleApplySignature({
+          x: placeholder.x,
+          y: placeholder.y,
+          page: placeholder.page
+        });
+      });
+    }
   };
 
   const handleFinalizeDocument = async () => {
@@ -321,6 +350,20 @@ const Index = () => {
                   <p className="text-xs text-gray-500">Type: {file.type || "Unknown"}</p>
                 </div>
                 
+                {/* Show signature preview */}
+                {signatureImage && (
+                  <div className="mb-3">
+                    <h3 className="font-medium mb-1">Your Signature</h3>
+                    <div className="border p-2 bg-gray-50 rounded-md">
+                      <img 
+                        src={signatureImage} 
+                        alt="Your signature" 
+                        className="max-h-12 object-contain"
+                      />
+                    </div>
+                  </div>
+                )}
+                
                 <div className="flex flex-col gap-2">
                   <Button 
                     onClick={() => setSignatureOpen(true)}
@@ -391,6 +434,7 @@ const Index = () => {
                   onRepositionSignature={handleRepositionSignature}
                   signatures={!signedPdfUrl ? signatures : undefined}
                   onUpdatePlaceholders={handleUpdatePlaceholders}
+                  disableClickToSign={true} // New prop to disable clicking on document to place signature
                 />
                 {!signedPdfUrl && file && (
                   <PlaceholderSidebar />
