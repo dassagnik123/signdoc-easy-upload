@@ -34,6 +34,7 @@ interface DocumentViewerProps {
   onPlaceholderMove?: (placeholderId: string, newX: number, newY: number) => void;
   draggedPlaceholderId?: string | null;
   disableClickToSign?: boolean;
+  onSignatureMove?: (signatureIndex: number, newX: number, newY: number) => void;
 }
 
 export const DocumentViewer = ({
@@ -49,6 +50,7 @@ export const DocumentViewer = ({
   onPlaceholderMove,
   draggedPlaceholderId,
   disableClickToSign = false,
+  onSignatureMove,
 }: DocumentViewerProps) => {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -57,6 +59,8 @@ export const DocumentViewer = ({
   const [isWordLoading, setIsWordLoading] = useState(false);
   const [wordError, setWordError] = useState<string | null>(null);
   const [isDraggingPlaceholder, setIsDraggingPlaceholder] = useState(false);
+  const [isDraggingSignature, setIsDraggingSignature] = useState(false);
+  const [draggingSignatureIndex, setDraggingSignatureIndex] = useState<number | null>(null);
   
   // Placeholders state for form fields
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
@@ -176,18 +180,43 @@ export const DocumentViewer = ({
     e.preventDefault();
   };
 
+  const handleSignatureMouseDown = (e: React.MouseEvent, signatureIndex: number) => {
+    // Don't start dragging if we're clicking on a button or control
+    if ((e.target as HTMLElement).closest('button')) {
+      return;
+    }
+    
+    setIsDraggingSignature(true);
+    setDraggingSignatureIndex(signatureIndex);
+    
+    // Prevent text selection and PDF interaction during drag
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDraggingPlaceholder || !draggedPlaceholderId || !contentRef.current || !onPlaceholderMove) return;
+    if (isDraggingPlaceholder && draggedPlaceholderId && contentRef.current && onPlaceholderMove) {
+      const rect = contentRef.current.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / scale;
+      const y = (e.clientY - rect.top) / scale;
+      
+      onPlaceholderMove(draggedPlaceholderId, x, y);
+    }
     
-    const rect = contentRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / scale;
-    const y = (e.clientY - rect.top) / scale;
-    
-    onPlaceholderMove(draggedPlaceholderId, x, y);
+    // Handle signature dragging
+    if (isDraggingSignature && draggingSignatureIndex !== null && contentRef.current && onSignatureMove) {
+      const rect = contentRef.current.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / scale;
+      const y = (e.clientY - rect.top) / scale;
+      
+      onSignatureMove(draggingSignatureIndex, x, y);
+    }
   };
 
   const handleMouseUp = () => {
     setIsDraggingPlaceholder(false);
+    setIsDraggingSignature(false);
+    setDraggingSignatureIndex(null);
   };
 
   // Add event listeners for mouse up
@@ -196,14 +225,14 @@ export const DocumentViewer = ({
       handleMouseUp();
     };
     
-    if (isDraggingPlaceholder) {
+    if (isDraggingPlaceholder || isDraggingSignature) {
       window.addEventListener('mouseup', handleGlobalMouseUp);
     }
     
     return () => {
       window.removeEventListener('mouseup', handleGlobalMouseUp);
     };
-  }, [isDraggingPlaceholder]);
+  }, [isDraggingPlaceholder, isDraggingSignature]);
 
   const renderSignatures = () => {
     if (!signatures || signatures.length === 0) return null;
@@ -213,27 +242,35 @@ export const DocumentViewer = ({
       (sig) => sig.page === pageNumber - 1 // Match the current page (0-based index)
     );
 
-    return currentPageSignatures.map((sig, index) => (
-      <div
-        key={`signature-${index}`}
-        className="absolute pointer-events-none"
-        style={{
-          left: `${sig.x * scale}px`,
-          top: `${sig.y * scale}px`,
-          zIndex: 10,
-        }}
-      >
-        <img
-          src={sig.url}
-          alt="Signature"
+    return currentPageSignatures.map((sig, index) => {
+      // Find the actual index in the original signatures array
+      const originalIndex = signatures.findIndex(
+        (s) => s.page === sig.page && s.x === sig.x && s.y === sig.y
+      );
+      
+      return (
+        <div
+          key={`signature-${index}`}
+          className={`absolute ${!isSigned ? 'cursor-move' : 'pointer-events-none'}`}
           style={{
-            width: "200px",
-            height: "50px",
-            objectFit: "contain",
+            left: `${sig.x * scale}px`,
+            top: `${sig.y * scale}px`,
+            zIndex: draggingSignatureIndex === originalIndex ? 20 : 10,
           }}
-        />
-      </div>
-    ));
+          onMouseDown={(e) => !isSigned && handleSignatureMouseDown(e, originalIndex)}
+        >
+          <img
+            src={sig.url}
+            alt="Signature"
+            style={{
+              width: "200px",
+              height: "50px",
+              objectFit: "contain",
+            }}
+          />
+        </div>
+      );
+    });
   };
 
   const handleDeletePlaceholder = (id: string) => {
@@ -552,6 +589,7 @@ export const DocumentViewer = ({
         >
           {renderContent()}
           {renderPlaceholders()}
+          {renderSignatures()}
         </div>
       </div>
       

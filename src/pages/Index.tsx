@@ -139,6 +139,33 @@ const Index = () => {
     }
   };
 
+  const handleSignatureMove = (signatureIndex: number, newX: number, newY: number) => {
+    if (signatureIndex < 0 || signatureIndex >= signatures.length) return;
+    
+    setSignatures(prev => {
+      const newSignatures = [...prev];
+      newSignatures[signatureIndex] = {
+        ...newSignatures[signatureIndex],
+        x: newX,
+        y: newY
+      };
+      return newSignatures;
+    });
+    
+    // Also update any associated placeholder if needed
+    const signature = signatures[signatureIndex];
+    setPlaceholders(prev => 
+      prev.map(p => 
+        (p.type === "signature" && 
+         p.page === signature.page && 
+         Math.abs(p.x - signature.x) < 5 && 
+         Math.abs(p.y - signature.y) < 5)
+          ? { ...p, x: newX, y: newY }
+          : p
+      )
+    );
+  };
+
   const handlePlaceholderDelete = (placeholderId: string) => {
     // Find the placeholder that was deleted
     const deletedPlaceholder = placeholders.find(p => p.id === placeholderId);
@@ -474,6 +501,7 @@ const Index = () => {
                   onPlaceholderMove={handlePlaceholderMove}
                   draggedPlaceholderId={draggedPlaceholderId}
                   disableClickToSign={true}
+                  onSignatureMove={handleSignatureMove}
                 />
                 {!signedPdfUrl && file && (
                   <PlaceholderSidebar />
