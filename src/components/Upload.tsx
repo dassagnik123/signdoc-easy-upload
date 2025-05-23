@@ -6,9 +6,10 @@ import { FilePen } from "lucide-react";
 
 interface UploadProps {
   onFileUpload: (file: File) => void;
+  buttonText?: string;
 }
 
-export const Upload = ({ onFileUpload }: UploadProps) => {
+export const Upload = ({ onFileUpload, buttonText = "Select File" }: UploadProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -53,7 +54,7 @@ export const Upload = ({ onFileUpload }: UploadProps) => {
         onClick={() => fileInputRef.current?.click()}
         className="w-full"
       >
-        Select File
+        {buttonText}
       </Button>
     </div>
   );
