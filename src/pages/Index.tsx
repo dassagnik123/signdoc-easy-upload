@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload } from "@/components/Upload";
 import { DocumentViewer } from "@/components/DocumentViewer";
@@ -36,21 +36,102 @@ const Index = () => {
   const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
   const [draggedPlaceholderId, setDraggedPlaceholderId] = useState<string | null>(null);
   
+  // Generate a unique key for the document based on name and size
+  const getDocumentKey = (file: File) => {
+    return `document_${file.name}_${file.size}`;
+  };
+
+  // Save placeholders to localStorage
+  const savePlaceholders = () => {
+    if (!file) {
+      toast.error("No document loaded", {
+        description: "Please upload a document first.",
+      });
+      return;
+    }
+
+    const documentKey = getDocumentKey(file);
+    const saveData = {
+      placeholders,
+      documentName: file.name,
+      savedAt: new Date().toISOString(),
+    };
+    
+    localStorage.setItem(documentKey, JSON.stringify(saveData));
+    
+    toast.success("Placeholders saved", {
+      description: `Saved ${placeholders.length} placeholders for ${file.name}`,
+    });
+  };
+
+  // Load placeholders from localStorage
+  const loadPlaceholders = (file: File) => {
+    const documentKey = getDocumentKey(file);
+    const savedData = localStorage.getItem(documentKey);
+    
+    if (savedData) {
+      try {
+        const { placeholders: savedPlaceholders, savedAt } = JSON.parse(savedData);
+        setPlaceholders(savedPlaceholders);
+        
+        toast.success("Placeholders loaded", {
+          description: `Loaded ${savedPlaceholders.length} saved placeholders`,
+        });
+        
+        return true;
+      } catch (error) {
+        console.error("Error loading saved placeholders:", error);
+        toast.error("Error loading placeholders", {
+          description: "Failed to load saved placeholders for this document.",
+        });
+      }
+    }
+    
+    return false;
+  };
+
+  // Check if document has saved placeholders
+  const hasSavedPlaceholders = (file: File) => {
+    const documentKey = getDocumentKey(file);
+    return localStorage.getItem(documentKey) !== null;
+  };
+
   const handleFileUpload = (uploadedFile: File) => {
     setFile(uploadedFile);
-    setSignedPdfUrl(null); // Reset signed PDF if a new document is uploaded
-    setSignatures([]); // Reset signatures array
-    setPlaceholders([]); // Reset placeholders array
+    setSignedPdfUrl(null);
+    setSignatures([]);
+    
+    // Check if this document has saved placeholders
+    if (hasSavedPlaceholders(uploadedFile)) {
+      // Load saved placeholders
+      loadPlaceholders(uploadedFile);
+    } else {
+      // Reset placeholders for new document
+      setPlaceholders([]);
+    }
+    
     toast.success("Document uploaded", {
       description: `${uploadedFile.name} has been uploaded successfully.`,
     });
   };
 
+  // Load saved signature from localStorage on component mount
+  useEffect(() => {
+    const savedSignature = localStorage.getItem('saved_signature');
+    if (savedSignature) {
+      setSignatureImage(savedSignature);
+    }
+  }, []);
+
   const handleSignatureCreate = (signatureDataUrl: string) => {
     setSignatureImage(signatureDataUrl);
     setSignatureOpen(false);
+    
+    // Save signature to localStorage for future use
+    localStorage.setItem('saved_signature', signatureDataUrl);
+    
     toast.success("Signature created", {
-      description: "Your signature has been created successfully.",
+      description: "Your signature has been created and saved for future use.",
     });
   };
 
@@ -434,6 +515,9 @@ const Index = () => {
                   <h3 className="font-medium mb-1">Current Document</h3>
                   <p className="text-sm text-gray-600 truncate">{file.name}</p>
                   <p className="text-xs text-gray-500">Type: {file.type || "Unknown"}</p>
+                  {hasSavedPlaceholders(file) && (
+                    <p className="text-xs text-green-600">Has saved placeholders</p>
+                  )}
                 </div>
                 
                 {/* Show signature preview */}
@@ -458,6 +542,17 @@ const Index = () => {
                   >
                     {signatureImage ? "Change Signature" : "Create Signature"}
                   </Button>
+                  
+                  {placeholders.length > 0 && (
+                    <Button 
+                      onClick={savePlaceholders}
+                      variant="outline"
+                      className="w-full"
+                      disabled={isProcessing}
+                    >
+                      Save Placeholders ({placeholders.length})
+                    </Button>
+                  )}
                   
                   <Button 
                     variant="outline" 
