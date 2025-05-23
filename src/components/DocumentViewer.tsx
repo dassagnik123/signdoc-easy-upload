@@ -145,8 +145,12 @@ export const DocumentViewer = ({
     setScale((prev) => Math.max(prev - 0.2, 0.6));
   };
 
+  // Improved page click handler to prevent unwanted clicks during dragging
   const handlePageClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // This function is kept for backward compatibility, but with disableClickToSign=true, it won't do anything
+    // Don't handle clicks if we're in dragging mode
+    if (isDraggingSignature || isDraggingPlaceholder) return;
+    
+    // Otherwise continue with original functionality
     if (disableClickToSign || !signingMode || !signatureImage) return;
 
     // Get the bounding rectangle of the clicked element
@@ -171,6 +175,7 @@ export const DocumentViewer = ({
       return;
     }
     
+    e.stopPropagation(); // Stop event from propagating to parent elements
     setIsDraggingPlaceholder(true);
     if (onPlaceholderDragStart) {
       onPlaceholderDragStart(placeholderId);
@@ -186,34 +191,38 @@ export const DocumentViewer = ({
       return;
     }
     
+    e.stopPropagation(); // Prevent PDF from getting the click event
+    e.preventDefault(); // Prevent default behaviors like text selection
+    
+    console.log("Signature drag started", signatureIndex);
     setIsDraggingSignature(true);
     setDraggingSignatureIndex(signatureIndex);
-    
-    // Prevent text selection and PDF interaction during drag
-    e.preventDefault();
-    e.stopPropagation();
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDraggingPlaceholder && draggedPlaceholderId && contentRef.current && onPlaceholderMove) {
-      const rect = contentRef.current.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / scale;
-      const y = (e.clientY - rect.top) / scale;
-      
+    if (!contentRef.current) return;
+    
+    const rect = contentRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / scale;
+    const y = (e.clientY - rect.top) / scale;
+    
+    // Handle placeholder dragging
+    if (isDraggingPlaceholder && draggedPlaceholderId && onPlaceholderMove) {
       onPlaceholderMove(draggedPlaceholderId, x, y);
     }
     
     // Handle signature dragging
-    if (isDraggingSignature && draggingSignatureIndex !== null && contentRef.current && onSignatureMove) {
-      const rect = contentRef.current.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / scale;
-      const y = (e.clientY - rect.top) / scale;
-      
+    if (isDraggingSignature && draggingSignatureIndex !== null && onSignatureMove) {
+      console.log("Moving signature", draggingSignatureIndex, "to", x, y);
       onSignatureMove(draggingSignatureIndex, x, y);
     }
   };
 
   const handleMouseUp = () => {
+    if (isDraggingSignature) {
+      console.log("Signature drag ended");
+    }
+    
     setIsDraggingPlaceholder(false);
     setIsDraggingSignature(false);
     setDraggingSignatureIndex(null);
@@ -251,11 +260,12 @@ export const DocumentViewer = ({
       return (
         <div
           key={`signature-${index}`}
-          className={`absolute ${!isSigned ? 'cursor-move' : 'pointer-events-none'}`}
+          className={`absolute ${!isSigned ? 'cursor-move border-2 border-transparent hover:border-blue-300' : 'pointer-events-none'}`}
           style={{
             left: `${sig.x * scale}px`,
             top: `${sig.y * scale}px`,
             zIndex: draggingSignatureIndex === originalIndex ? 20 : 10,
+            touchAction: 'none', // Prevents scrolling when dragging on touch devices
           }}
           onMouseDown={(e) => !isSigned && handleSignatureMouseDown(e, originalIndex)}
         >
@@ -266,7 +276,9 @@ export const DocumentViewer = ({
               width: "200px",
               height: "50px",
               objectFit: "contain",
+              pointerEvents: "none", // Make sure the image doesn't interfere with dragging
             }}
+            draggable={false} // Disable browser's native drag
           />
         </div>
       );
@@ -299,6 +311,7 @@ export const DocumentViewer = ({
           left: `${placeholder.x * scale}px`,
           top: `${placeholder.y * scale}px`,
           zIndex: 15,
+          touchAction: 'none', // Prevents scrolling when dragging on touch devices
         }}
         onMouseDown={(e) => handlePlaceholderMouseDown(e, placeholder.id)}
       >
@@ -306,7 +319,8 @@ export const DocumentViewer = ({
           <img
             src={placeholder.value}
             alt="Signature"
-            className="max-w-[200px] max-h-[50px] object-contain"
+            className="max-w-[200px] max-h-[50px] object-contain pointer-events-none"
+            draggable={false}
           />
         ) : (
           <div className="flex flex-col">
@@ -589,7 +603,6 @@ export const DocumentViewer = ({
         >
           {renderContent()}
           {renderPlaceholders()}
-          {renderSignatures()}
         </div>
       </div>
       

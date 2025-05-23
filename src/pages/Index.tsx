@@ -79,7 +79,7 @@ const Index = () => {
         url: signatureImage,
         x: position.x,
         y: position.y,
-        page: position.page // This now correctly uses the page from the position parameter
+        page: position.page
       }
     ]);
     
@@ -104,7 +104,7 @@ const Index = () => {
         handleApplySignature({
           x: placeholder.x,
           y: placeholder.y,
-          page: placeholder.page // This passes the correct page number from the placeholder
+          page: placeholder.page
         });
       });
     }
@@ -139,11 +139,23 @@ const Index = () => {
     }
   };
 
+  // Improved signature movement handler with console.log for debugging
   const handleSignatureMove = (signatureIndex: number, newX: number, newY: number) => {
-    if (signatureIndex < 0 || signatureIndex >= signatures.length) return;
+    console.log("Moving signature in parent component", signatureIndex, newX, newY);
+    
+    if (signatureIndex < 0 || signatureIndex >= signatures.length) {
+      console.log("Invalid signature index:", signatureIndex);
+      return;
+    }
     
     setSignatures(prev => {
       const newSignatures = [...prev];
+      const oldX = newSignatures[signatureIndex].x;
+      const oldY = newSignatures[signatureIndex].y;
+      const page = newSignatures[signatureIndex].page;
+      
+      console.log(`Updating signature from (${oldX}, ${oldY}) to (${newX}, ${newY}) on page ${page}`);
+      
       newSignatures[signatureIndex] = {
         ...newSignatures[signatureIndex],
         x: newX,
@@ -154,16 +166,18 @@ const Index = () => {
     
     // Also update any associated placeholder if needed
     const signature = signatures[signatureIndex];
-    setPlaceholders(prev => 
-      prev.map(p => 
-        (p.type === "signature" && 
-         p.page === signature.page && 
-         Math.abs(p.x - signature.x) < 5 && 
-         Math.abs(p.y - signature.y) < 5)
-          ? { ...p, x: newX, y: newY }
-          : p
-      )
-    );
+    if (signature) {
+      setPlaceholders(prev => 
+        prev.map(p => 
+          (p.type === "signature" && 
+           p.page === signature.page && 
+           Math.abs(p.x - signature.x) < 5 && 
+           Math.abs(p.y - signature.y) < 5)
+            ? { ...p, x: newX, y: newY }
+            : p
+        )
+      );
+    }
   };
 
   const handlePlaceholderDelete = (placeholderId: string) => {
