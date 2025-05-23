@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -82,7 +81,7 @@ const SignDocument = () => {
       try {
         // Even though we don't have the file content, we can still load the placeholders
         const { placeholders: savedPlaceholders } = JSON.parse(savedData);
-        setPlaceholders(savedPlaceholders);
+        setPlaceholders(savedPlaceholders || []);
         
         // Extract file name from document ID
         const fileName = docId.substring(9, docId.lastIndexOf('_'));
@@ -147,11 +146,11 @@ const SignDocument = () => {
     if (savedData) {
       try {
         const { placeholders: savedPlaceholders } = JSON.parse(savedData);
-        setPlaceholders(savedPlaceholders);
+        setPlaceholders(savedPlaceholders || []);
         
         // Also load any signatures from placeholders
         if (signatureImage) {
-          const sigPlaceholders = savedPlaceholders.filter(p => p.type === "signature");
+          const sigPlaceholders = savedPlaceholders?.filter(p => p.type === "signature") || [];
           
           // Add signatures based on placeholders
           const newSignatures = sigPlaceholders.map(p => ({
@@ -165,7 +164,7 @@ const SignDocument = () => {
         }
         
         toast.success("Document loaded", {
-          description: `Loaded document with ${savedPlaceholders.length} placeholders`,
+          description: `Loaded document with ${savedPlaceholders?.length || 0} placeholders`,
         });
         
         return true;
@@ -189,17 +188,49 @@ const SignDocument = () => {
       return;
     }
 
-    const saveData = {
-      placeholders,
-      documentName: file?.name || documentId.substring(9, documentId.lastIndexOf('_')),
-      savedAt: new Date().toISOString(),
-    };
-    
-    localStorage.setItem(documentId, JSON.stringify(saveData));
-    
-    toast.success("Placeholders saved", {
-      description: `Saved ${placeholders.length} placeholders`,
-    });
+    try {
+      const saveData = {
+        placeholders,
+        documentName: file?.name || documentId.substring(9, documentId.lastIndexOf('_')),
+        savedAt: new Date().toISOString(),
+      };
+      
+      // Check localStorage space before saving
+      const dataString = JSON.stringify(saveData);
+      
+      // Try to save - if it fails due to quota, clean up old files first
+      try {
+        localStorage.setItem(documentId, dataString);
+      } catch (quotaError) {
+        console.log("Storage quota exceeded, cleaning up old files...");
+        
+        // Remove old file content data to make space
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('file_') && key !== `file_${documentId}`) {
+            keysToRemove.push(key);
+          }
+        }
+        
+        // Remove old file contents
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        
+        // Try saving again
+        localStorage.setItem(documentId, dataString);
+      }
+      
+      toast.success("Placeholders saved", {
+        description: `Saved ${placeholders.length} placeholders`,
+      });
+      
+      console.log("Saved placeholders:", placeholders);
+    } catch (error) {
+      console.error("Error saving placeholders:", error);
+      toast.error("Failed to save placeholders", {
+        description: "Storage quota exceeded. Try clearing browser data or use fewer large files.",
+      });
+    }
   };
 
   const handleSignatureCreate = (signatureDataUrl: string) => {
@@ -249,6 +280,7 @@ const SignDocument = () => {
   };
 
   const handleUpdatePlaceholders = (updatedPlaceholders: Placeholder[]) => {
+    console.log("Updating placeholders:", updatedPlaceholders);
     setPlaceholders(updatedPlaceholders);
     
     // Apply signature to any signature placeholders if we have a signature
