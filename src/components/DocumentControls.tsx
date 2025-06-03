@@ -1,6 +1,8 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { RecipientOrderDialog, Recipient } from "@/components/RecipientOrderDialog";
+import { Users } from "lucide-react";
 
 interface Placeholder {
   id: string;
@@ -48,6 +50,32 @@ export const DocumentControls: React.FC<DocumentControlsProps> = ({
   onFinalizeDocument,
   onDownload,
 }) => {
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [recipientDialogOpen, setRecipientDialogOpen] = useState(false);
+
+  const handleSaveRecipients = (newRecipients: Recipient[]) => {
+    setRecipients(newRecipients);
+    
+    // Save recipients to localStorage for the current document
+    if (documentId) {
+      const existingData = localStorage.getItem(documentId);
+      let saveData: any = {};
+      
+      if (existingData) {
+        try {
+          saveData = JSON.parse(existingData);
+        } catch (error) {
+          console.error("Error parsing existing data:", error);
+        }
+      }
+      
+      saveData.recipients = newRecipients;
+      saveData.savedAt = new Date().toISOString();
+      
+      localStorage.setItem(documentId, JSON.stringify(saveData));
+    }
+  };
+
   return (
     <div className="w-full md:w-1/3 bg-white p-6 rounded-lg shadow">
       <h2 className="text-xl font-semibold mb-4">Document Controls</h2>
@@ -65,6 +93,38 @@ export const DocumentControls: React.FC<DocumentControlsProps> = ({
             <h3 className="font-medium mb-1">Current Document</h3>
             <p className="text-sm text-gray-600 truncate">{file?.name || documentId?.substring(9, documentId.lastIndexOf('_'))}</p>
             <p className="text-xs text-gray-500">Type: {file?.type || "Unknown"}</p>
+          </div>
+
+          {/* Recipients Section */}
+          <div>
+            <h3 className="font-medium mb-2">Recipients & Signing Order</h3>
+            {recipients.length > 0 ? (
+              <div className="space-y-2 mb-3">
+                {recipients.map((recipient, index) => (
+                  <div key={recipient.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded text-sm">
+                    <span className="w-6 h-6 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-xs font-medium">
+                      {recipient.order}
+                    </span>
+                    <div className="flex-1">
+                      <div className="font-medium">{recipient.name}</div>
+                      <div className="text-gray-500 text-xs">{recipient.email}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 mb-3">No recipients set</p>
+            )}
+            
+            <Button 
+              onClick={() => setRecipientDialogOpen(true)}
+              variant="outline"
+              className="w-full"
+              disabled={isProcessing}
+            >
+              <Users className="h-4 w-4 mr-2" />
+              {recipients.length > 0 ? "Edit Recipients" : "Set Recipients"}
+            </Button>
           </div>
           
           {signatureImage && (
@@ -122,6 +182,13 @@ export const DocumentControls: React.FC<DocumentControlsProps> = ({
           </div>
         </div>
       )}
+
+      <RecipientOrderDialog
+        open={recipientDialogOpen}
+        onOpenChange={setRecipientDialogOpen}
+        onSave={handleSaveRecipients}
+        initialRecipients={recipients}
+      />
     </div>
   );
 };
