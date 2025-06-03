@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { RecipientOrderDialog, Recipient } from "@/components/RecipientOrderDialog";
-import { Users, FileText, Signature } from "lucide-react";
+import { Users, FileText, Signature, Settings } from "lucide-react";
 
 interface Placeholder {
   id: string;
@@ -12,7 +12,7 @@ interface Placeholder {
   y: number;
   page: number;
   value?: string;
-  recipientId?: string; // Add recipient assignment
+  recipientId?: string;
 }
 
 interface SignaturePosition {
@@ -94,14 +94,17 @@ export const DocumentControls: React.FC<DocumentControlsProps> = ({
     }
   };
 
-  // Get placeholders assigned to a specific recipient
-  const getRecipientPlaceholders = (recipientId: string) => {
+  const getTotalAssignedFields = () => {
+    return placeholders.filter(p => p.recipientId).length;
+  };
+
+  const getFieldsForRecipient = (recipientId: string) => {
     return placeholders.filter(p => p.recipientId === recipientId);
   };
 
   return (
     <div className="w-full md:w-1/3 bg-white p-6 rounded-lg shadow">
-      <h2 className="text-xl font-semibold mb-4">Document Controls</h2>
+      <h2 className="text-xl font-semibold mb-6">Document Setup</h2>
       
       {!fileUrl && !file && (
         <div className="p-4 border border-dashed border-gray-300 rounded-lg text-center">
@@ -111,133 +114,136 @@ export const DocumentControls: React.FC<DocumentControlsProps> = ({
       )}
 
       {(file || fileUrl) && (
-        <div className="space-y-4">
-          <div>
-            <h3 className="font-medium mb-1">Current Document</h3>
+        <div className="space-y-6">
+          {/* Document Info */}
+          <div className="pb-4 border-b border-gray-100">
+            <h3 className="font-medium text-gray-900 mb-1">Document</h3>
             <p className="text-sm text-gray-600 truncate">{file?.name || documentId?.substring(9, documentId.lastIndexOf('_'))}</p>
-            <p className="text-xs text-gray-500">Type: {file?.type || "Unknown"}</p>
           </div>
 
-          {/* Recipients Section */}
+          {/* Step 1: Recipients */}
           <div>
-            <h3 className="font-medium mb-2">Recipients & Signing Order</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium text-gray-900">1. Who Signs?</h3>
+              <Button 
+                onClick={() => setRecipientDialogOpen(true)}
+                variant="ghost"
+                size="sm"
+                disabled={isProcessing}
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </div>
+            
             {recipients.length > 0 ? (
-              <div className="space-y-3 mb-3">
-                {recipients.map((recipient, index) => {
-                  const recipientPlaceholders = getRecipientPlaceholders(recipient.id);
-                  const signaturePlaceholders = recipientPlaceholders.filter(p => p.type === "signature");
-                  const textPlaceholders = recipientPlaceholders.filter(p => p.type === "text");
-                  
+              <div className="space-y-2">
+                {recipients.map((recipient) => {
+                  const assignedFields = getFieldsForRecipient(recipient.id);
                   return (
-                    <div key={recipient.id} className="border rounded-lg p-3 bg-gray-50">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="w-6 h-6 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-xs font-medium">
+                    <div key={recipient.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-xs font-medium">
                           {recipient.order}
                         </span>
-                        <div className="flex-1">
-                          <div className="font-medium">{recipient.name}</div>
-                          <div className="text-gray-500 text-xs">{recipient.email}</div>
+                        <div>
+                          <div className="font-medium text-sm">{recipient.name}</div>
+                          <div className="text-xs text-gray-500">{assignedFields.length} fields</div>
                         </div>
                       </div>
-                      
-                      {/* Show assigned placeholders */}
-                      {recipientPlaceholders.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          <div className="text-xs text-gray-600 font-medium">Assigned Fields:</div>
-                          <div className="flex flex-wrap gap-1">
-                            {signaturePlaceholders.map(p => (
-                              <span key={p.id} className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
-                                <Signature className="w-3 h-3" />
-                                {p.label}
-                              </span>
-                            ))}
-                            {textPlaceholders.map(p => (
-                              <span key={p.id} className="inline-flex items-center gap-1 bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
-                                <FileText className="w-3 h-3" />
-                                {p.label}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {recipientPlaceholders.length === 0 && (
-                        <div className="text-xs text-gray-400 italic mt-1">
-                          No fields assigned yet
-                        </div>
-                      )}
                     </div>
                   );
                 })}
               </div>
             ) : (
-              <p className="text-sm text-gray-500 mb-3">No recipients set</p>
-            )}
-            
-            <Button 
-              onClick={() => setRecipientDialogOpen(true)}
-              variant="outline"
-              className="w-full"
-              disabled={isProcessing}
-            >
-              <Users className="h-4 w-4 mr-2" />
-              {recipients.length > 0 ? "Edit Recipients" : "Set Recipients"}
-            </Button>
-          </div>
-          
-          {signatureImage && (
-            <div className="mb-3">
-              <h3 className="font-medium mb-1">Your Signature</h3>
-              <div className="border p-2 bg-gray-50 rounded-md">
-                <img 
-                  src={signatureImage} 
-                  alt="Your signature" 
-                  className="max-h-12 object-contain"
-                />
-              </div>
-            </div>
-          )}
-          
-          <div className="flex flex-col gap-2">
-            <Button 
-              onClick={onCreateSignature}
-              className="w-full"
-              disabled={isProcessing}
-            >
-              {signatureImage ? "Change Signature" : "Create Signature"}
-            </Button>
-            
-            {placeholders.length > 0 && (
               <Button 
-                onClick={onSavePlaceholders}
+                onClick={() => setRecipientDialogOpen(true)}
                 variant="outline"
                 className="w-full"
                 disabled={isProcessing}
               >
-                Save Placeholders ({placeholders.length})
-              </Button>
-            )}
-            
-            {(signatureImage && signatures.length > 0 || placeholders.length > 0) && !signedPdfUrl && (
-              <Button 
-                onClick={onFinalizeDocument}
-                className="w-full bg-green-600 hover:bg-green-700"
-                disabled={isProcessing || !file}
-              >
-                Finalize Document ({signatures.length} signatures, {placeholders.filter(p => p.type === "text" && p.value).length} text fields)
-              </Button>
-            )}
-            
-            {signedPdfUrl && (
-              <Button 
-                onClick={onDownload}
-                className="w-full bg-green-600 hover:bg-green-700"
-                disabled={isProcessing}
-              >
-                Download Signed Document
+                <Users className="h-4 w-4 mr-2" />
+                Add Recipients
               </Button>
             )}
           </div>
+
+          {/* Step 2: Signature */}
+          <div>
+            <h3 className="font-medium text-gray-900 mb-3">2. Your Signature</h3>
+            {signatureImage ? (
+              <div className="mb-3">
+                <div className="border p-2 bg-gray-50 rounded">
+                  <img 
+                    src={signatureImage} 
+                    alt="Your signature" 
+                    className="max-h-8 object-contain"
+                  />
+                </div>
+              </div>
+            ) : null}
+            
+            <Button 
+              onClick={onCreateSignature}
+              variant={signatureImage ? "outline" : "default"}
+              className="w-full"
+              disabled={isProcessing}
+            >
+              {signatureImage ? "Update Signature" : "Create Signature"}
+            </Button>
+          </div>
+
+          {/* Step 3: Progress & Actions */}
+          {recipients.length > 0 && (
+            <div>
+              <h3 className="font-medium text-gray-900 mb-3">3. Complete Setup</h3>
+              
+              <div className="space-y-2 mb-4">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Fields assigned:</span>
+                  <span className="font-medium">{getTotalAssignedFields()}</span>
+                </div>
+                {signatureImage && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Signatures placed:</span>
+                    <span className="font-medium">{signatures.length}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                {placeholders.length > 0 && (
+                  <Button 
+                    onClick={onSavePlaceholders}
+                    variant="outline"
+                    className="w-full"
+                    disabled={isProcessing}
+                  >
+                    Save Progress
+                  </Button>
+                )}
+                
+                {(signatureImage && signatures.length > 0 || placeholders.length > 0) && !signedPdfUrl && (
+                  <Button 
+                    onClick={onFinalizeDocument}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                    disabled={isProcessing || !file}
+                  >
+                    Finalize Document
+                  </Button>
+                )}
+                
+                {signedPdfUrl && (
+                  <Button 
+                    onClick={onDownload}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                    disabled={isProcessing}
+                  >
+                    Download Signed Document
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
