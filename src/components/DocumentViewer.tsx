@@ -18,6 +18,7 @@ interface Placeholder {
   y: number;
   page: number;
   value?: string;
+  recipientId?: string; // Add recipient assignment
 }
 
 interface DocumentViewerProps {
@@ -325,6 +326,9 @@ export const DocumentViewer = ({
         ) : (
           <div className="flex flex-col">
             <div className="text-xs text-blue-600 font-medium">{placeholder.label}</div>
+            {placeholder.recipientId && (
+              <div className="text-xs text-gray-500 italic">Assigned to recipient</div>
+            )}
             {placeholder.value ? (
               <div className="text-sm">{placeholder.value}</div>
             ) : (
@@ -498,8 +502,8 @@ export const DocumentViewer = ({
     }),
   }));
 
-  // Function to add a new placeholder
-  const addPlaceholder = (type: "signature" | "text", label: string, x: number, y: number) => {
+  // Function to add a new placeholder with recipient assignment
+  const addPlaceholder = (type: "signature" | "text", label: string, x: number, y: number, recipientId?: string) => {
     const newPlaceholder: Placeholder = {
       id: `placeholder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
@@ -508,6 +512,7 @@ export const DocumentViewer = ({
       y,
       page: pageNumber - 1, // Store 0-based page index - this is crucial for correct page tracking
       value: type === "signature" && signatureImage ? signatureImage : "",
+      recipientId, // Assign to recipient
     };
     
     setPlaceholders(prev => [...prev, newPlaceholder]);

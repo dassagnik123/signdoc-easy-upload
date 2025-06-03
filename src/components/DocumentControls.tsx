@@ -1,8 +1,8 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { RecipientOrderDialog, Recipient } from "@/components/RecipientOrderDialog";
-import { Users } from "lucide-react";
+import { Users, FileText, Signature } from "lucide-react";
 
 interface Placeholder {
   id: string;
@@ -12,6 +12,7 @@ interface Placeholder {
   y: number;
   page: number;
   value?: string;
+  recipientId?: string; // Add recipient assignment
 }
 
 interface SignaturePosition {
@@ -53,6 +54,23 @@ export const DocumentControls: React.FC<DocumentControlsProps> = ({
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [recipientDialogOpen, setRecipientDialogOpen] = useState(false);
 
+  // Load recipients from localStorage when component mounts or documentId changes
+  useEffect(() => {
+    if (documentId) {
+      const existingData = localStorage.getItem(documentId);
+      if (existingData) {
+        try {
+          const saveData = JSON.parse(existingData);
+          if (saveData.recipients) {
+            setRecipients(saveData.recipients);
+          }
+        } catch (error) {
+          console.error("Error loading recipients:", error);
+        }
+      }
+    }
+  }, [documentId]);
+
   const handleSaveRecipients = (newRecipients: Recipient[]) => {
     setRecipients(newRecipients);
     
@@ -74,6 +92,11 @@ export const DocumentControls: React.FC<DocumentControlsProps> = ({
       
       localStorage.setItem(documentId, JSON.stringify(saveData));
     }
+  };
+
+  // Get placeholders assigned to a specific recipient
+  const getRecipientPlaceholders = (recipientId: string) => {
+    return placeholders.filter(p => p.recipientId === recipientId);
   };
 
   return (
@@ -99,18 +122,53 @@ export const DocumentControls: React.FC<DocumentControlsProps> = ({
           <div>
             <h3 className="font-medium mb-2">Recipients & Signing Order</h3>
             {recipients.length > 0 ? (
-              <div className="space-y-2 mb-3">
-                {recipients.map((recipient, index) => (
-                  <div key={recipient.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded text-sm">
-                    <span className="w-6 h-6 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-xs font-medium">
-                      {recipient.order}
-                    </span>
-                    <div className="flex-1">
-                      <div className="font-medium">{recipient.name}</div>
-                      <div className="text-gray-500 text-xs">{recipient.email}</div>
+              <div className="space-y-3 mb-3">
+                {recipients.map((recipient, index) => {
+                  const recipientPlaceholders = getRecipientPlaceholders(recipient.id);
+                  const signaturePlaceholders = recipientPlaceholders.filter(p => p.type === "signature");
+                  const textPlaceholders = recipientPlaceholders.filter(p => p.type === "text");
+                  
+                  return (
+                    <div key={recipient.id} className="border rounded-lg p-3 bg-gray-50">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-6 h-6 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-xs font-medium">
+                          {recipient.order}
+                        </span>
+                        <div className="flex-1">
+                          <div className="font-medium">{recipient.name}</div>
+                          <div className="text-gray-500 text-xs">{recipient.email}</div>
+                        </div>
+                      </div>
+                      
+                      {/* Show assigned placeholders */}
+                      {recipientPlaceholders.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <div className="text-xs text-gray-600 font-medium">Assigned Fields:</div>
+                          <div className="flex flex-wrap gap-1">
+                            {signaturePlaceholders.map(p => (
+                              <span key={p.id} className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                                <Signature className="w-3 h-3" />
+                                {p.label}
+                              </span>
+                            ))}
+                            {textPlaceholders.map(p => (
+                              <span key={p.id} className="inline-flex items-center gap-1 bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
+                                <FileText className="w-3 h-3" />
+                                {p.label}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {recipientPlaceholders.length === 0 && (
+                        <div className="text-xs text-gray-400 italic mt-1">
+                          No fields assigned yet
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-gray-500 mb-3">No recipients set</p>
