@@ -1,9 +1,12 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { DocumentViewer } from "@/components/DocumentViewer";
 import { SignatureDialog } from "@/components/SignatureDialog";
 import { PlaceholderSidebar } from "@/components/PlaceholderSidebar";
+import { RecipientOrderDialog } from "@/components/RecipientOrderDialog";
+import type { Recipient } from "@/components/RecipientOrderDialog";
 import { toast } from "sonner";
 import { PDFDocument, rgb } from "pdf-lib";
 import { DndProvider } from "react-dnd";
