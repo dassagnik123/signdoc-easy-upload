@@ -56,7 +56,7 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
       id: `recipient_${Date.now()}`,
       name: newRecipientName.trim(),
       email: newRecipientEmail.trim(),
-      order: orderType === "without-order" ? 1 : recipients.length + 1,
+      order: orderType === "without-order" ? 1 : getNextOrderNumber(),
       status: "pending",
     };
 
@@ -66,38 +66,37 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
     toast.success("Recipient added");
   };
 
+  const getNextOrderNumber = () => {
+    if (recipients.length === 0) return 1;
+    const maxOrder = Math.max(...recipients.map(r => r.order));
+    return maxOrder + 1;
+  };
+
   const removeRecipient = (id: string) => {
-    const updatedRecipients = recipients
-      .filter((r) => r.id !== id)
-      .map((r, index) => ({ 
-        ...r, 
-        order: orderType === "without-order" ? 1 : index + 1 
-      }));
+    const updatedRecipients = recipients.filter((r) => r.id !== id);
     setRecipients(updatedRecipients);
     toast.success("Recipient removed");
+  };
+
+  const updateRecipientOrder = (id: string, newOrder: number) => {
+    if (newOrder < 1) return;
+    
+    const updatedRecipients = recipients.map((r) =>
+      r.id === id ? { ...r, order: newOrder } : r
+    );
+    setRecipients(updatedRecipients);
   };
 
   const moveRecipient = (id: string, direction: "up" | "down") => {
     if (orderType === "without-order") return;
     
-    const currentIndex = recipients.findIndex((r) => r.id === id);
-    if (currentIndex === -1) return;
+    const recipient = recipients.find(r => r.id === id);
+    if (!recipient) return;
 
-    const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-    if (newIndex < 0 || newIndex >= recipients.length) return;
+    const newOrder = direction === "up" ? recipient.order - 1 : recipient.order + 1;
+    if (newOrder < 1) return;
 
-    const updatedRecipients = [...recipients];
-    [updatedRecipients[currentIndex], updatedRecipients[newIndex]] = [
-      updatedRecipients[newIndex],
-      updatedRecipients[currentIndex],
-    ];
-
-    // Update order numbers
-    updatedRecipients.forEach((r, index) => {
-      r.order = index + 1;
-    });
-
-    setRecipients(updatedRecipients);
+    updateRecipientOrder(id, newOrder);
   };
 
   const handleOrderTypeChange = (value: string) => {
@@ -124,9 +123,31 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
     if (orderType === "without-order") {
       toast.success(`All ${recipients.length} recipients will sign simultaneously`);
     } else {
-      toast.success(`Signing order set for ${recipients.length} recipients`);
+      // Count unique orders to show how many signing rounds there will be
+      const uniqueOrders = new Set(recipients.map(r => r.order));
+      const simultaneousGroups = recipients.filter(r => 
+        recipients.filter(other => other.order === r.order).length > 1
+      );
+      
+      if (simultaneousGroups.length > 0) {
+        toast.success(`Signing order set with ${uniqueOrders.size} rounds for ${recipients.length} recipients`);
+      } else {
+        toast.success(`Signing order set for ${recipients.length} recipients`);
+      }
     }
   };
+
+  // Group recipients by order for display
+  const groupedRecipients = recipients.reduce((groups, recipient) => {
+    const order = recipient.order;
+    if (!groups[order]) {
+      groups[order] = [];
+    }
+    groups[order].push(recipient);
+    return groups;
+  }, {} as Record<number, Recipient[]>);
+
+  const sortedOrders = Object.keys(groupedRecipients).map(Number).sort((a, b) => a - b);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -146,7 +167,7 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="with-order" id="with-order" />
                 <Label htmlFor="with-order" className="cursor-pointer">
-                  With order - Recipients sign one after another
+                  With order - Recipients sign in specified order (can share same order)
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
@@ -199,51 +220,97 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
                   : `Signing Order (${recipients.length} recipients)`
                 }
               </h3>
-              {recipients.map((recipient, index) => (
-                <div
-                  key={recipient.id}
-                  className="flex items-center gap-3 p-3 border rounded-lg bg-white"
-                >
-                  <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-800 rounded-full font-medium text-sm">
-                    {orderType === "without-order" ? "•" : recipient.order}
-                  </div>
-                  
-                  <div className="flex-1">
-                    <div className="font-medium">{recipient.name}</div>
-                    <div className="text-sm text-gray-500">{recipient.email}</div>
-                  </div>
+              
+              {orderType === "without-order" ? (
+                // Show all recipients without grouping for "without-order"
+                recipients.map((recipient) => (
+                  <div
+                    key={recipient.id}
+                    className="flex items-center gap-3 p-3 border rounded-lg bg-white"
+                  >
+                    <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-800 rounded-full font-medium text-sm">
+                      •
+                    </div>
+                    
+                    <div className="flex-1">
+                      <div className="font-medium">{recipient.name}</div>
+                      <div className="text-sm text-gray-500">{recipient.email}</div>
+                    </div>
 
-                  <div className="flex items-center gap-1">
-                    {orderType === "with-order" && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => moveRecipient(recipient.id, "up")}
-                          disabled={index === 0}
-                        >
-                          <ArrowUp className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => moveRecipient(recipient.id, "down")}
-                          disabled={index === recipients.length - 1}
-                        >
-                          <ArrowDown className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeRecipient(recipient.id)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeRecipient(recipient.id)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                // Show grouped recipients for "with-order"
+                sortedOrders.map((orderNumber) => (
+                  <div key={orderNumber} className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-600">
+                      <span>Order {orderNumber}</span>
+                      {groupedRecipients[orderNumber].length > 1 && (
+                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                          {groupedRecipients[orderNumber].length} recipients (simultaneous)
+                        </span>
+                      )}
+                    </div>
+                    {groupedRecipients[orderNumber].map((recipient) => (
+                      <div
+                        key={recipient.id}
+                        className="flex items-center gap-3 p-3 border rounded-lg bg-white ml-4"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-800 rounded-full font-medium text-sm">
+                            {recipient.order}
+                          </div>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={recipient.order}
+                            onChange={(e) => updateRecipientOrder(recipient.id, parseInt(e.target.value) || 1)}
+                            className="w-16 h-8 text-center"
+                          />
+                        </div>
+                        
+                        <div className="flex-1">
+                          <div className="font-medium">{recipient.name}</div>
+                          <div className="text-sm text-gray-500">{recipient.email}</div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => moveRecipient(recipient.id, "up")}
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => moveRecipient(recipient.id, "down")}
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeRecipient(recipient.id)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))
+              )}
             </div>
           )}
 
