@@ -11,13 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { X, Plus, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "sonner";
 
@@ -45,6 +39,7 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
   const [recipients, setRecipients] = useState<Recipient[]>(initialRecipients);
   const [newRecipientName, setNewRecipientName] = useState("");
   const [newRecipientEmail, setNewRecipientEmail] = useState("");
+  const [orderType, setOrderType] = useState<"with-order" | "without-order">("with-order");
 
   const addRecipient = () => {
     if (!newRecipientName.trim() || !newRecipientEmail.trim()) {
@@ -61,7 +56,7 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
       id: `recipient_${Date.now()}`,
       name: newRecipientName.trim(),
       email: newRecipientEmail.trim(),
-      order: recipients.length + 1,
+      order: orderType === "without-order" ? 1 : recipients.length + 1,
       status: "pending",
     };
 
@@ -74,12 +69,17 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
   const removeRecipient = (id: string) => {
     const updatedRecipients = recipients
       .filter((r) => r.id !== id)
-      .map((r, index) => ({ ...r, order: index + 1 }));
+      .map((r, index) => ({ 
+        ...r, 
+        order: orderType === "without-order" ? 1 : index + 1 
+      }));
     setRecipients(updatedRecipients);
     toast.success("Recipient removed");
   };
 
   const moveRecipient = (id: string, direction: "up" | "down") => {
+    if (orderType === "without-order") return;
+    
     const currentIndex = recipients.findIndex((r) => r.id === id);
     if (currentIndex === -1) return;
 
@@ -100,6 +100,18 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
     setRecipients(updatedRecipients);
   };
 
+  const handleOrderTypeChange = (value: string) => {
+    const newOrderType = value as "with-order" | "without-order";
+    setOrderType(newOrderType);
+    
+    // Update existing recipients based on order type
+    const updatedRecipients = recipients.map((r, index) => ({
+      ...r,
+      order: newOrderType === "without-order" ? 1 : index + 1
+    }));
+    setRecipients(updatedRecipients);
+  };
+
   const handleSave = () => {
     if (recipients.length === 0) {
       toast.error("Please add at least one recipient");
@@ -108,7 +120,12 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
 
     onSave(recipients);
     onOpenChange(false);
-    toast.success(`Signing order set for ${recipients.length} recipients`);
+    
+    if (orderType === "without-order") {
+      toast.success(`All ${recipients.length} recipients will sign simultaneously`);
+    } else {
+      toast.success(`Signing order set for ${recipients.length} recipients`);
+    }
   };
 
   return (
@@ -117,12 +134,30 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Set Signing Order</DialogTitle>
           <DialogDescription>
-            Add recipients and define the order in which they should sign the document.
-            Recipients will receive the document in sequence.
+            Add recipients and choose how they should sign the document.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
+          {/* Order Type Selection */}
+          <div className="border rounded-lg p-4 bg-gray-50">
+            <h3 className="font-medium mb-3">Signing Order</h3>
+            <RadioGroup value={orderType} onValueChange={handleOrderTypeChange}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="with-order" id="with-order" />
+                <Label htmlFor="with-order" className="cursor-pointer">
+                  With order - Recipients sign one after another
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="without-order" id="without-order" />
+                <Label htmlFor="without-order" className="cursor-pointer">
+                  Without order - All recipients can sign simultaneously
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+
           {/* Add new recipient */}
           <div className="border rounded-lg p-4 bg-gray-50">
             <h3 className="font-medium mb-3">Add Recipient</h3>
@@ -158,14 +193,19 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
           {/* Recipients list */}
           {recipients.length > 0 && (
             <div className="space-y-3">
-              <h3 className="font-medium">Signing Order ({recipients.length} recipients)</h3>
+              <h3 className="font-medium">
+                {orderType === "without-order" 
+                  ? `Recipients (${recipients.length} - all sign simultaneously)`
+                  : `Signing Order (${recipients.length} recipients)`
+                }
+              </h3>
               {recipients.map((recipient, index) => (
                 <div
                   key={recipient.id}
                   className="flex items-center gap-3 p-3 border rounded-lg bg-white"
                 >
                   <div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-800 rounded-full font-medium text-sm">
-                    {recipient.order}
+                    {orderType === "without-order" ? "•" : recipient.order}
                   </div>
                   
                   <div className="flex-1">
@@ -174,22 +214,26 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
                   </div>
 
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => moveRecipient(recipient.id, "up")}
-                      disabled={index === 0}
-                    >
-                      <ArrowUp className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => moveRecipient(recipient.id, "down")}
-                      disabled={index === recipients.length - 1}
-                    >
-                      <ArrowDown className="h-4 w-4" />
-                    </Button>
+                    {orderType === "with-order" && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => moveRecipient(recipient.id, "up")}
+                          disabled={index === 0}
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => moveRecipient(recipient.id, "down")}
+                          disabled={index === recipients.length - 1}
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -205,7 +249,7 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
 
           {recipients.length === 0 && (
             <div className="text-center py-8 text-gray-500">
-              No recipients added yet. Add recipients above to define the signing order.
+              No recipients added yet. Add recipients above to continue.
             </div>
           )}
         </div>
@@ -215,7 +259,7 @@ export const RecipientOrderDialog: React.FC<RecipientOrderDialogProps> = ({
             Cancel
           </Button>
           <Button onClick={handleSave} disabled={recipients.length === 0}>
-            Save Signing Order
+            Save {orderType === "without-order" ? "Recipients" : "Signing Order"}
           </Button>
         </DialogFooter>
       </DialogContent>
