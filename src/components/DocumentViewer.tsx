@@ -30,6 +30,7 @@ interface DocumentViewerProps {
   isSigned: boolean;
   onRepositionSignature?: () => void;
   signatures?: Array<{ url: string; x: number; y: number; page: number }>;
+  placeholders?: Placeholder[]; // Add placeholders prop
   onUpdatePlaceholders?: (placeholders: Placeholder[]) => void;
   onDeletePlaceholder?: (placeholderId: string) => void;
   onPlaceholderDragStart?: (placeholderId: string) => void;
@@ -64,6 +65,10 @@ export const DocumentViewer = ({
   const [isDraggingPlaceholder, setIsDraggingPlaceholder] = useState(false);
   const [isDraggingSignature, setIsDraggingSignature] = useState(false);
   const [draggingSignatureIndex, setDraggingSignatureIndex] = useState<number | null>(null);
+  
+  // Add missing state variables for placeholder editing
+  const [editingPlaceholderId, setEditingPlaceholderId] = useState<string | null>(null);
+  const [placeholderText, setPlaceholderText] = useState("");
   
   // Placeholders state for form fields
   const [internalPlaceholders, setInternalPlaceholders] = useState<Placeholder[]>([]);
@@ -299,6 +304,28 @@ export const DocumentViewer = ({
     }
     
     if (editingPlaceholderId === id) {
+      setEditingPlaceholderId(null);
+      setPlaceholderText("");
+    }
+  };
+
+  const handleEditPlaceholder = (id: string) => {
+    const placeholder = placeholders.find(p => p.id === id);
+    if (placeholder) {
+      setEditingPlaceholderId(id);
+      setPlaceholderText(placeholder.value || "");
+    }
+  };
+
+  const handleSavePlaceholder = () => {
+    if (editingPlaceholderId) {
+      setPlaceholders(prev => 
+        prev.map(p => 
+          p.id === editingPlaceholderId 
+            ? { ...p, value: placeholderText } 
+            : p
+        )
+      );
       setEditingPlaceholderId(null);
       setPlaceholderText("");
     }
@@ -549,28 +576,6 @@ export const DocumentViewer = ({
         y, 
         page: pageNumber - 1 // Use 0-based page index - this is crucial
       });
-    }
-  };
-
-  const handleEditPlaceholder = (id: string) => {
-    const placeholder = placeholders.find(p => p.id === id);
-    if (placeholder) {
-      setEditingPlaceholderId(id);
-      setPlaceholderText(placeholder.value || "");
-    }
-  };
-
-  const handleSavePlaceholder = () => {
-    if (editingPlaceholderId) {
-      setPlaceholders(prev => 
-        prev.map(p => 
-          p.id === editingPlaceholderId 
-            ? { ...p, value: placeholderText } 
-            : p
-        )
-      );
-      setEditingPlaceholderId(null);
-      setPlaceholderText("");
     }
   };
 
