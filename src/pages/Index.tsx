@@ -1,636 +1,261 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Upload } from "@/components/Upload";
-import { DocumentViewer } from "@/components/DocumentViewer";
-import { SignatureDialog } from "@/components/SignatureDialog";
-import { PlaceholderSidebar } from "@/components/PlaceholderSidebar";
+import { FileText, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { PDFDocument, rgb } from "pdf-lib";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { formatDistanceToNow } from "date-fns";
 
-interface SignaturePosition {
-  url: string;
-  x: number;
-  y: number;
-  page: number;
-}
-
-interface Placeholder {
+interface Document {
   id: string;
-  type: "signature" | "text";
-  label: string;
-  x: number;
-  y: number;
-  page: number;
-  value?: string;
+  name: string;
+  savedAt: string;
+  placeholders: number;
 }
 
 const Index = () => {
-  const [file, setFile] = useState<File | null>(null);
-  const [signatureOpen, setSignatureOpen] = useState(false);
-  const [signatureImage, setSignatureImage] = useState<string | null>(null);
-  const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null);
-  const [signatures, setSignatures] = useState<SignaturePosition[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
-  const [draggedPlaceholderId, setDraggedPlaceholderId] = useState<string | null>(null);
-  
-  // Generate a unique key for the document based on name and size
-  const getDocumentKey = (file: File) => {
-    return `document_${file.name}_${file.size}`;
-  };
+  const navigate = useNavigate();
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
 
-  // Save placeholders to localStorage
-  const savePlaceholders = () => {
-    if (!file) {
-      toast.error("No document loaded", {
-        description: "Please upload a document first.",
-      });
-      return;
-    }
-
-    const documentKey = getDocumentKey(file);
-    const saveData = {
-      placeholders,
-      documentName: file.name,
-      savedAt: new Date().toISOString(),
-    };
-    
-    localStorage.setItem(documentKey, JSON.stringify(saveData));
-    
-    toast.success("Placeholders saved", {
-      description: `Saved ${placeholders.length} placeholders for ${file.name}`,
-    });
-  };
-
-  // Load placeholders from localStorage
-  const loadPlaceholders = (file: File) => {
-    const documentKey = getDocumentKey(file);
-    const savedData = localStorage.getItem(documentKey);
-    
-    if (savedData) {
-      try {
-        const { placeholders: savedPlaceholders, savedAt } = JSON.parse(savedData);
-        setPlaceholders(savedPlaceholders);
-        
-        toast.success("Placeholders loaded", {
-          description: `Loaded ${savedPlaceholders.length} saved placeholders`,
-        });
-        
-        return true;
-      } catch (error) {
-        console.error("Error loading saved placeholders:", error);
-        toast.error("Error loading placeholders", {
-          description: "Failed to load saved placeholders for this document.",
-        });
-      }
-    }
-    
-    return false;
-  };
-
-  // Check if document has saved placeholders
-  const hasSavedPlaceholders = (file: File) => {
-    const documentKey = getDocumentKey(file);
-    return localStorage.getItem(documentKey) !== null;
-  };
-
-  const handleFileUpload = (uploadedFile: File) => {
-    setFile(uploadedFile);
-    setSignedPdfUrl(null);
-    setSignatures([]);
-    
-    // Check if this document has saved placeholders
-    if (hasSavedPlaceholders(uploadedFile)) {
-      // Load saved placeholders
-      loadPlaceholders(uploadedFile);
-    } else {
-      // Reset placeholders for new document
-      setPlaceholders([]);
-    }
-    
-    toast.success("Document uploaded", {
-      description: `${uploadedFile.name} has been uploaded successfully.`,
-    });
-  };
-
-  // Load saved signature from localStorage on component mount
   useEffect(() => {
-    const savedSignature = localStorage.getItem('saved_signature');
-    if (savedSignature) {
-      setSignatureImage(savedSignature);
-    }
+    loadDocuments();
   }, []);
 
-  const handleSignatureCreate = (signatureDataUrl: string) => {
-    setSignatureImage(signatureDataUrl);
-    setSignatureOpen(false);
+  const loadDocuments = () => {
+    const docs: Document[] = [];
     
-    // Save signature to localStorage for future use
-    localStorage.setItem('saved_signature', signatureDataUrl);
-    
-    toast.success("Signature created", {
-      description: "Your signature has been created and saved for future use.",
-    });
-  };
-
-  const handleApplySignature = async (position: { x: number; y: number; page: number }) => {
-    if (!file || !signatureImage) {
-      toast.error("Error signing document", {
-        description: "Both document and signature are required.",
-      });
-      return;
-    }
-    
-    // Check if a signature already exists at this position and page
-    const existingSignatureIndex = signatures.findIndex(
-      sig => sig.x === position.x && sig.y === position.y && sig.page === position.page
-    );
-
-    // If a signature already exists at this position, don't add another one
-    if (existingSignatureIndex !== -1) {
-      return;
-    }
-    
-    // Add the signature to the array - ensure we use the correct page number
-    setSignatures((prev) => [
-      ...prev,
-      {
-        url: signatureImage,
-        x: position.x,
-        y: position.y,
-        page: position.page
-      }
-    ]);
-    
-    toast.success("Signature added", {
-      description: "Click 'Done Signing' when you've placed all signatures.",
-    });
-  };
-
-  const handleUpdatePlaceholders = (updatedPlaceholders: Placeholder[]) => {
-    setPlaceholders(updatedPlaceholders);
-    
-    // Apply signature to any signature placeholders if we have a signature
-    if (signatureImage) {
-      const signaturePlaceholders = updatedPlaceholders.filter(p => p.type === "signature" && !p.value);
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
       
-      // For each signature placeholder without a value, add our signature
-      signaturePlaceholders.forEach(placeholder => {
-        // Update the placeholder value
-        placeholder.value = signatureImage;
-        
-        // Also add to signatures array for rendering
-        handleApplySignature({
-          x: placeholder.x,
-          y: placeholder.y,
-          page: placeholder.page
-        });
-      });
-    }
-  };
-
-  // Placeholder movement functionality
-  const handlePlaceholderDragStart = (placeholderId: string) => {
-    setDraggedPlaceholderId(placeholderId);
-  };
-
-  const handlePlaceholderMove = (id: string, newX: number, newY: number) => {
-    setPlaceholders(prev => 
-      prev.map(p => 
-        p.id === id 
-          ? { ...p, x: newX, y: newY } 
-          : p
-      )
-    );
-
-    // Also update any associated signature
-    const placeholder = placeholders.find(p => p.id === id);
-    if (placeholder && placeholder.type === "signature" && placeholder.value) {
-      setSignatures(prev => 
-        prev.map(sig => 
-          (sig.page === placeholder.page && 
-           Math.abs(sig.x - placeholder.x) < 5 && 
-           Math.abs(sig.y - placeholder.y) < 5)
-            ? { ...sig, x: newX, y: newY }
-            : sig
-        )
-      );
-    }
-  };
-
-  // Improved signature movement handler with console.log for debugging
-  const handleSignatureMove = (signatureIndex: number, newX: number, newY: number) => {
-    console.log("Moving signature in parent component", signatureIndex, newX, newY);
-    
-    if (signatureIndex < 0 || signatureIndex >= signatures.length) {
-      console.log("Invalid signature index:", signatureIndex);
-      return;
-    }
-    
-    setSignatures(prev => {
-      const newSignatures = [...prev];
-      const oldX = newSignatures[signatureIndex].x;
-      const oldY = newSignatures[signatureIndex].y;
-      const page = newSignatures[signatureIndex].page;
-      
-      console.log(`Updating signature from (${oldX}, ${oldY}) to (${newX}, ${newY}) on page ${page}`);
-      
-      newSignatures[signatureIndex] = {
-        ...newSignatures[signatureIndex],
-        x: newX,
-        y: newY
-      };
-      return newSignatures;
-    });
-    
-    // Also update any associated placeholder if needed
-    const signature = signatures[signatureIndex];
-    if (signature) {
-      setPlaceholders(prev => 
-        prev.map(p => 
-          (p.type === "signature" && 
-           p.page === signature.page && 
-           Math.abs(p.x - signature.x) < 5 && 
-           Math.abs(p.y - signature.y) < 5)
-            ? { ...p, x: newX, y: newY }
-            : p
-        )
-      );
-    }
-  };
-
-  const handlePlaceholderDelete = (placeholderId: string) => {
-    // Find the placeholder that was deleted
-    const deletedPlaceholder = placeholders.find(p => p.id === placeholderId);
-    
-    if (deletedPlaceholder) {
-      // Remove the placeholder from state
-      setPlaceholders(prev => prev.filter(p => p.id !== placeholderId));
-      
-      // If it was a signature placeholder, also remove any signatures at that position
-      if (deletedPlaceholder.type === "signature") {
-        setSignatures(prev => prev.filter(sig => 
-          !(sig.x === deletedPlaceholder.x && 
-            sig.y === deletedPlaceholder.y && 
-            sig.page === deletedPlaceholder.page)
-        ));
+      if (key && key.startsWith('document_')) {
+        try {
+          const data = JSON.parse(localStorage.getItem(key) || '{}');
+          
+          if (data.savedAt && data.documentName) {
+            docs.push({
+              id: key,
+              name: data.documentName,
+              savedAt: data.savedAt,
+              placeholders: data.placeholders?.length || 0
+            });
+          }
+        } catch (error) {
+          console.error("Error parsing document data:", error);
+        }
       }
     }
+    
+    // Sort by most recently saved
+    docs.sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+    setDocuments(docs);
   };
 
-  const handleFinalizeDocument = async () => {
-    if (!file || (signatures.length === 0 && placeholders.length === 0)) {
-      toast.error("Cannot finalize document", {
-        description: "Please add at least one signature or text field to the document.",
-      });
-      return;
-    }
-    
-    setIsProcessing(true);
-    
+  const handleFileUpload = async (file: File) => {
     try {
-      console.log("Applying signatures:", signatures);
-      console.log("Applying placeholders:", placeholders);
-      console.log("File type:", file.type);
+      // Create a unique ID for the document
+      const documentId = `document_${file.name.replace(/\s+/g, '_')}_${Date.now()}`;
       
-      // For PDF files
-      if (file.type === "application/pdf") {
-        // Load the PDF document
-        const arrayBuffer = await file.arrayBuffer();
-        const pdfDoc = await PDFDocument.load(arrayBuffer);
-        
-        // Process each signature
-        for (const signature of signatures) {
-          // Create a base64 string of the signature (removing data URL prefix)
-          const signatureBase64 = signature.url.split(',')[1];
-          
-          // Use Uint8Array instead of Buffer for browser compatibility
-          const signatureBytes = Uint8Array.from(atob(signatureBase64), c => c.charCodeAt(0));
-          
-          // Embed the signature image
-          const signatureEmbed = await pdfDoc.embedPng(signatureBytes);
-          
-          // Get the specified page
-          const pages = pdfDoc.getPages();
-          if (signature.page >= pages.length) {
-            throw new Error("Invalid page number");
-          }
-          
-          const page = pages[signature.page];
-          const { width, height } = page.getSize();
-          
-          // Draw the signature on the page
-          page.drawImage(signatureEmbed, {
-            x: signature.x,
-            y: height - signature.y - 50, // Flip Y-coordinate (PDF coordinate system starts from bottom-left)
-            width: 200,
-            height: 50,
-          });
-        }
-
-        // Process each text placeholder
-        for (const placeholder of placeholders.filter(p => p.type === "text" && p.value)) {
-          const pages = pdfDoc.getPages();
-          if (placeholder.page >= pages.length) {
-            continue; // Skip invalid pages
-          }
-          
-          const page = pages[placeholder.page];
-          const { height } = page.getSize();
-          
-          // Add text to PDF - Fix the color format to use rgb() from pdf-lib
-          page.drawText(placeholder.value || placeholder.label, {
-            x: placeholder.x,
-            y: height - placeholder.y - 20, // Adjust Y position for PDF coordinates
-            size: 12,
-            color: rgb(0, 0, 0), // Using the rgb function from pdf-lib instead of {r:0, g:0, b:0}
-          });
-        }
-        
-        // Save the modified PDF
-        const pdfBytes = await pdfDoc.save();
-        
-        // Create a URL for the new PDF
-        const blob = new Blob([pdfBytes], { type: "application/pdf" });
-        const url = URL.createObjectURL(blob);
-        
-        setSignedPdfUrl(url);
-      } else {
-        // For all non-PDF files (including Word documents, text files, and images)
-        const canvas = document.createElement('canvas');
-        
-        // Set a reasonable default size for the document representation
-        canvas.width = 800;
-        canvas.height = 600;
-        
-        const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error("Could not get canvas context");
-        
-        // For image files, draw the actual image as background
-        if (file.type.startsWith("image/")) {
-          const img = new Image();
-          img.src = URL.createObjectURL(file);
-          
-          await new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
-          });
-          
-          // Update canvas dimensions to match image
-          canvas.width = img.naturalWidth || img.width;
-          canvas.height = img.naturalHeight || img.height;
-          
-          // Draw the original image
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        } else {
-          // For Word documents or text files, create a placeholder
-          ctx.fillStyle = "#f0f0f0";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          
-          // Add document title
-          ctx.font = "24px Arial";
-          ctx.fillStyle = "#333333";
-          ctx.textAlign = "center";
-          ctx.fillText("Signed Document", canvas.width / 2, 60);
-          
-          // Draw document icon
-          ctx.font = "48px Arial";
-          ctx.fillStyle = "#4287f5";
-          ctx.textAlign = "center";
-          ctx.fillText("📄", canvas.width / 2, canvas.height / 3);
-          
-          // Add message
-          ctx.font = "18px Arial";
-          ctx.fillStyle = "#666666";
-          ctx.textAlign = "center";
-          ctx.fillText("Document with applied signatures", canvas.width / 2, canvas.height / 3 + 60);
-        }
-        
-        // Draw each signature on the document
-        for (const signature of signatures) {
-          const sigImg = new Image();
-          sigImg.src = signature.url;
-          
-          await new Promise((resolve, reject) => {
-            sigImg.onload = resolve;
-            sigImg.onerror = reject;
-          });
-          
-          // Signature dimensions
-          const sigWidth = 200;
-          const sigHeight = 50;
-          
-          // For safety, ensure coordinates are within canvas bounds
-          const x = Math.min(Math.max(signature.x, 0), canvas.width - sigWidth);
-          const y = Math.min(Math.max(signature.y, 0), canvas.height - sigHeight);
-          
-          // Draw the signature at the specified position
-          ctx.drawImage(sigImg, x, y, sigWidth, sigHeight);
-        }
-
-        // Draw each text field on the document
-        for (const placeholder of placeholders.filter(p => p.type === "text" && p.value)) {
-          // For safety, ensure coordinates are within canvas bounds
-          const x = Math.min(Math.max(placeholder.x, 0), canvas.width - 100);
-          const y = Math.min(Math.max(placeholder.y, 0), canvas.height - 20);
-          
-          // Draw a light background for the text
-          ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
-          ctx.fillRect(x, y, 150, 25);
-          
-          // Draw the text
-          ctx.font = "14px Arial";
-          ctx.fillStyle = "#000000";
-          ctx.textAlign = "left";
-          ctx.fillText(placeholder.value || "", x + 5, y + 17);
-        }
-        
-        // Convert canvas to data URL and create a blob URL
-        const mimeType = file.type.startsWith("image/") ? file.type : "image/png";
-        const dataUrl = canvas.toDataURL(mimeType);
-        const blob = await (await fetch(dataUrl)).blob();
-        const url = URL.createObjectURL(blob);
-        
-        setSignedPdfUrl(url);
-      }
+      // Store the file content in localStorage
+      const reader = new FileReader();
       
-      toast.success("Document finalized", {
-        description: "All signatures and fields have been applied to the document.",
-      });
+      reader.onload = () => {
+        try {
+          localStorage.setItem(`file_${documentId}`, reader.result as string);
+          
+          // Navigate to the sign document page
+          navigate(`/sign/${documentId}`);
+        } catch (error) {
+          console.error("Error saving file:", error);
+          toast.error("Error saving file", {
+            description: "The file may be too large for browser storage.",
+          });
+        }
+      };
+      
+      reader.onerror = () => {
+        toast.error("Error reading file", {
+          description: "There was a problem reading the selected file.",
+        });
+      };
+      
+      reader.readAsDataURL(file);
     } catch (error) {
-      console.error("Error applying signatures:", error);
-      toast.error("Error finalizing document", {
-        description: "There was a problem applying your signatures. Please try again.",
+      console.error("Error in file upload:", error);
+      toast.error("Upload failed", {
+        description: "There was a problem uploading your document.",
       });
-    } finally {
-      setIsProcessing(false);
     }
   };
 
-  const handleRepositionSignature = () => {
-    // Clear the signed URL and allow re-signing
-    setSignedPdfUrl(null);
-    
-    toast.info("Reposition signatures", {
-      description: "You can now reposition your signatures by dragging the placeholders.",
-    });
+  const handleDeleteDocument = (documentId: string) => {
+    setDocumentToDelete(documentId);
+    setDeleteDialogOpen(true);
   };
 
-  const handleDownload = () => {
-    if (!signedPdfUrl) return;
-    
-    const a = document.createElement("a");
-    a.href = signedPdfUrl;
-    a.download = `signed-${file?.name || "document.pdf"}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    
-    toast.success("Download started", {
-      description: "Your signed document is being downloaded.",
-    });
+  const confirmDeleteDocument = () => {
+    if (documentToDelete) {
+      try {
+        // Remove the document data
+        localStorage.removeItem(documentToDelete);
+        
+        // Remove the file content
+        localStorage.removeItem(`file_${documentToDelete}`);
+        
+        // Update the documents list
+        setDocuments(prev => prev.filter(doc => doc.id !== documentToDelete));
+        
+        toast.success("Document deleted", {
+          description: "The document has been removed.",
+        });
+      } catch (error) {
+        console.error("Error deleting document:", error);
+        toast.error("Error deleting document", {
+          description: "There was a problem removing the document.",
+        });
+      }
+      
+      setDeleteDialogOpen(false);
+      setDocumentToDelete(null);
+    }
   };
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div className="min-h-screen flex flex-col gap-6 p-6 bg-gray-50">
-        <header className="text-center">
-          <h1 className="text-3xl font-bold mb-2">Document Signing App</h1>
-          <p className="text-gray-600">Upload a document and add your digital signature</p>
-        </header>
-
-        <div className="flex flex-col md:flex-row gap-6">
-          <div className="w-full md:w-1/3 bg-white p-6 rounded-lg shadow">
-            <h2 className="text-xl font-semibold mb-4">Document Controls</h2>
-            
-            {!file && (
-              <Upload onFileUpload={handleFileUpload} />
-            )}
-
-            {file && (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-medium mb-1">Current Document</h3>
-                  <p className="text-sm text-gray-600 truncate">{file.name}</p>
-                  <p className="text-xs text-gray-500">Type: {file.type || "Unknown"}</p>
-                  {hasSavedPlaceholders(file) && (
-                    <p className="text-xs text-green-600">Has saved placeholders</p>
-                  )}
-                </div>
-                
-                {/* Show signature preview */}
-                {signatureImage && (
-                  <div className="mb-3">
-                    <h3 className="font-medium mb-1">Your Signature</h3>
-                    <div className="border p-2 bg-gray-50 rounded-md">
-                      <img 
-                        src={signatureImage} 
-                        alt="Your signature" 
-                        className="max-h-12 object-contain"
-                      />
-                    </div>
-                  </div>
-                )}
-                
-                <div className="flex flex-col gap-2">
-                  <Button 
-                    onClick={() => setSignatureOpen(true)}
-                    className="w-full"
-                    disabled={isProcessing}
-                  >
-                    {signatureImage ? "Change Signature" : "Create Signature"}
-                  </Button>
-                  
-                  {placeholders.length > 0 && (
-                    <Button 
-                      onClick={savePlaceholders}
-                      variant="outline"
-                      className="w-full"
-                      disabled={isProcessing}
-                    >
-                      Save Placeholders ({placeholders.length})
-                    </Button>
-                  )}
-                  
-                  <Button 
-                    variant="outline" 
-                    onClick={() => {
-                      setFile(null);
-                      setSignedPdfUrl(null);
-                      setSignatures([]);
-                      setPlaceholders([]);
-                    }}
-                    className="w-full"
-                    disabled={isProcessing}
-                  >
-                    Upload New Document
-                  </Button>
-                  
-                  {(signatureImage && signatures.length > 0 || placeholders.length > 0) && !signedPdfUrl && (
-                    <Button 
-                      onClick={handleFinalizeDocument}
-                      className="w-full bg-green-600 hover:bg-green-700"
-                      disabled={isProcessing}
-                    >
-                      Finalize Document ({signatures.length} signatures, {placeholders.filter(p => p.type === "text" && p.value).length} text fields)
-                    </Button>
-                  )}
-                  
-                  {signedPdfUrl && (
-                    <>
-                      <Button 
-                        onClick={handleDownload}
-                        className="w-full bg-green-600 hover:bg-green-700"
-                        disabled={isProcessing}
-                      >
-                        Download Signed Document
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="w-full md:w-2/3 flex flex-col bg-white rounded-lg shadow overflow-hidden">
-            {(file || signedPdfUrl) ? (
-              <>
-                <DocumentViewer 
-                  file={signedPdfUrl || URL.createObjectURL(file!)} 
-                  fileType={file?.type || ""}
-                  signatureImage={signatureImage}
-                  onApplySignature={handleApplySignature}
-                  isSigned={!!signedPdfUrl}
-                  signatures={!signedPdfUrl ? signatures : undefined}
-                  onUpdatePlaceholders={handleUpdatePlaceholders}
-                  onDeletePlaceholder={handlePlaceholderDelete}
-                  onPlaceholderDragStart={handlePlaceholderDragStart}
-                  onPlaceholderMove={handlePlaceholderMove}
-                  draggedPlaceholderId={draggedPlaceholderId}
-                  disableClickToSign={true}
-                  onSignatureMove={handleSignatureMove}
-                />
-                {!signedPdfUrl && file && (
-                  <PlaceholderSidebar />
-                )}
-              </>
-            ) : (
-              <div className="h-[600px] flex items-center justify-center text-gray-500">
-                Upload a document to get started
-              </div>
-            )}
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-4xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            Digital Document Signing
+          </h1>
+          <p className="text-xl text-gray-600">
+            Upload, sign, and manage your documents with ease
+          </p>
         </div>
 
-        <SignatureDialog 
-          open={signatureOpen} 
-          onOpenChange={setSignatureOpen}
-          onSignatureCreate={handleSignatureCreate}
-        />
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
+          {/* Upload New Document */}
+          <Card className="p-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Upload & Sign Document
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Upload onFileUpload={handleFileUpload} />
+            </CardContent>
+          </Card>
+
+          {/* Create Template */}
+          <Card className="p-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Create Document Template
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center space-y-4">
+                <p className="text-gray-600">Create reusable templates with predefined placeholders</p>
+                <Button 
+                  onClick={() => navigate('/template')}
+                  className="w-full"
+                  variant="outline"
+                >
+                  Create Template
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Existing Documents Section */}
+        {documents.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-semibold mb-4">Your Documents</h2>
+            <div className="space-y-3">
+              {documents.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="flex items-center justify-between p-3 border rounded-md hover:bg-gray-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <FileText className="h-5 w-5 text-blue-600" />
+                    <div>
+                      <h3 className="font-medium">{doc.name}</h3>
+                      <p className="text-sm text-gray-500">
+                        {formatDistanceToNow(new Date(doc.savedAt), { addSuffix: true })} • 
+                        {doc.placeholders} placeholder{doc.placeholders !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(`/sign/${doc.id}`)}
+                    >
+                      Open
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          •••
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          className="text-red-600 cursor-pointer"
+                          onClick={() => handleDeleteDocument(doc.id)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-    </DndProvider>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Document</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this document? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteDocument}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 };
 

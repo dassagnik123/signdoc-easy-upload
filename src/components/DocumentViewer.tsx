@@ -18,7 +18,8 @@ interface Placeholder {
   y: number;
   page: number;
   value?: string;
-  recipientId?: string; // Add recipient assignment
+  recipientId?: string;
+  category?: "sender" | "recipient"; // Add category support
 }
 
 interface DocumentViewerProps {
@@ -52,6 +53,7 @@ export const DocumentViewer = ({
   draggedPlaceholderId,
   disableClickToSign = false,
   onSignatureMove,
+  placeholders: externalPlaceholders,
 }: DocumentViewerProps) => {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -64,9 +66,13 @@ export const DocumentViewer = ({
   const [draggingSignatureIndex, setDraggingSignatureIndex] = useState<number | null>(null);
   
   // Placeholders state for form fields
-  const [placeholders, setPlaceholders] = useState<Placeholder[]>([]);
-  const [editingPlaceholderId, setEditingPlaceholderId] = useState<string | null>(null);
-  const [placeholderText, setPlaceholderText] = useState("");
+  const [internalPlaceholders, setInternalPlaceholders] = useState<Placeholder[]>([]);
+  const placeholders = externalPlaceholders || internalPlaceholders;
+  const setPlaceholders = onUpdatePlaceholders ? 
+    (updater: React.SetStateAction<Placeholder[]>) => {
+      const newPlaceholders = typeof updater === 'function' ? updater(placeholders) : updater;
+      onUpdatePlaceholders(newPlaceholders);
+    } : setInternalPlaceholders;
   
   const documentRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -307,12 +313,22 @@ export const DocumentViewer = ({
     return currentPagePlaceholders.map(placeholder => (
       <div
         key={placeholder.id}
-        className={`absolute border-2 border-dashed ${draggedPlaceholderId === placeholder.id ? 'border-green-500' : 'border-blue-400'} p-2 bg-blue-50 bg-opacity-30 min-w-[100px] min-h-[40px] cursor-move`}
+        className={`absolute border-2 border-dashed ${
+          draggedPlaceholderId === placeholder.id 
+            ? 'border-green-500' 
+            : placeholder.category === 'sender' 
+              ? 'border-blue-400' 
+              : 'border-purple-400'
+        } p-2 ${
+          placeholder.category === 'sender' 
+            ? 'bg-blue-50' 
+            : 'bg-purple-50'
+        } bg-opacity-30 min-w-[100px] min-h-[40px] cursor-move`}
         style={{
           left: `${placeholder.x * scale}px`,
           top: `${placeholder.y * scale}px`,
           zIndex: 15,
-          touchAction: 'none', // Prevents scrolling when dragging on touch devices
+          touchAction: 'none',
         }}
         onMouseDown={(e) => handlePlaceholderMouseDown(e, placeholder.id)}
       >
@@ -325,7 +341,16 @@ export const DocumentViewer = ({
           />
         ) : (
           <div className="flex flex-col">
-            <div className="text-xs text-blue-600 font-medium">{placeholder.label}</div>
+            <div className={`text-xs font-medium ${
+              placeholder.category === 'sender' ? 'text-blue-600' : 'text-purple-600'
+            }`}>
+              {placeholder.label}
+            </div>
+            {placeholder.category && (
+              <div className="text-xs text-gray-500 italic">
+                {placeholder.category === 'sender' ? 'Sender' : 'Recipient'}
+              </div>
+            )}
             {placeholder.recipientId && (
               <div className="text-xs text-gray-500 italic">Assigned to recipient</div>
             )}
