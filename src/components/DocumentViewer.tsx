@@ -30,11 +30,12 @@ interface DocumentViewerProps {
   isSigned: boolean;
   onRepositionSignature?: () => void;
   signatures?: Array<{ url: string; x: number; y: number; page: number }>;
-  placeholders?: Placeholder[]; // Add placeholders prop
+  placeholders?: Placeholder[];
   onUpdatePlaceholders?: (placeholders: Placeholder[]) => void;
   onDeletePlaceholder?: (placeholderId: string) => void;
   onPlaceholderDragStart?: (placeholderId: string) => void;
   onPlaceholderMove?: (placeholderId: string, newX: number, newY: number) => void;
+  onDropPlaceholder?: (type: "signature" | "text", label: string, x: number, y: number, page: number, category: "sender" | "recipient") => void;
   draggedPlaceholderId?: string | null;
   disableClickToSign?: boolean;
   onSignatureMove?: (signatureIndex: number, newX: number, newY: number) => void;
@@ -51,6 +52,7 @@ export const DocumentViewer = ({
   onDeletePlaceholder,
   onPlaceholderDragStart,
   onPlaceholderMove,
+  onDropPlaceholder,
   draggedPlaceholderId,
   disableClickToSign = false,
   onSignatureMove,
@@ -72,7 +74,7 @@ export const DocumentViewer = ({
   
   // Placeholders state for form fields
   const [internalPlaceholders, setInternalPlaceholders] = useState<Placeholder[]>([]);
-  const placeholders = externalPlaceholders || internalPlaceholders;
+  const placeholders = externalPlaceholders || [];
   const setPlaceholders = onUpdatePlaceholders ? 
     (updater: React.SetStateAction<Placeholder[]>) => {
       const newPlaceholders = typeof updater === 'function' ? updater(placeholders) : updater;
@@ -541,12 +543,13 @@ export const DocumentViewer = ({
     accept: "PLACEHOLDER",
     drop: (item: { type: "signature" | "text"; label: string; category: "sender" | "recipient" }, monitor) => {
       const dropOffset = monitor.getClientOffset();
-      if (dropOffset && contentRef.current) {
+      if (dropOffset && contentRef.current && onDropPlaceholder) {
         const contentRect = contentRef.current.getBoundingClientRect();
         const x = dropOffset.x - contentRect.left;
         const y = dropOffset.y - contentRect.top;
         
-        addPlaceholder(item.type, item.label, x / scale, y / scale, item.category);
+        console.log("Dropping placeholder:", { type: item.type, label: item.label, x: x / scale, y: y / scale, page: pageNumber - 1, category: item.category });
+        onDropPlaceholder(item.type, item.label, x / scale, y / scale, pageNumber - 1, item.category);
       }
     },
     collect: (monitor) => ({
@@ -555,37 +558,9 @@ export const DocumentViewer = ({
   }));
 
   // Function to add a new placeholder with category and auto-populate signature for sender
-  const addPlaceholder = (type: "signature" | "text", label: string, x: number, y: number, category: "sender" | "recipient") => {
-    console.log("Adding placeholder:", { type, label, x, y, category });
-    
-    // Auto-populate signature for sender if available
-    let initialValue = "";
-    if (type === "signature" && category === "sender" && signatureImage) {
-      initialValue = signatureImage;
-      console.log("Auto-populating sender signature");
-    }
+  // Removed as it's now handled by the parent
 
-    const newPlaceholder: Placeholder = {
-      id: `placeholder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      type,
-      label,
-      x,
-      y,
-      page: pageNumber - 1, // Store 0-based page index
-      value: initialValue,
-      category,
-    };
-    
-    console.log("Creating new placeholder:", newPlaceholder);
-    
-    // Add to existing placeholders instead of replacing
-    setPlaceholders(prev => {
-      const updated = [...prev, newPlaceholder];
-      console.log("Updated placeholders:", updated);
-      return updated;
-    });
-  };
-
+  // ... keep existing code (return statement with JSX) until the end
   return (
     <div className="flex flex-col h-full">
       <div className="bg-gray-100 p-3 flex flex-wrap gap-2 justify-between items-center">

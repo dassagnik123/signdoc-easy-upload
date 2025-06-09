@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Upload } from "@/components/Upload";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import { toast } from "sonner";
 const Template = () => {
   const [file, setFile] = useState<File | null>(null);
   const [fileUrl, setFileUrl] = useState<string | null>(null);
+  const [signatureImage, setSignatureImage] = useState<string | null>(null);
 
   const {
     senderPlaceholders,
@@ -23,8 +25,17 @@ const Template = () => {
     handlePlaceholderDragStart,
     handlePlaceholderMove,
     handlePlaceholderDelete,
+    handleAddPlaceholder,
     handleSaveTemplate
   } = useTemplateManagement();
+
+  // Load saved signature on component mount
+  useState(() => {
+    const savedSignature = localStorage.getItem('saved_signature');
+    if (savedSignature) {
+      setSignatureImage(savedSignature);
+    }
+  }, []);
 
   const handleFileUpload = (uploadedFile: File) => {
     setFile(uploadedFile);
@@ -38,7 +49,7 @@ const Template = () => {
     });
   };
 
-  const handleAddPlaceholder = (type: "signature" | "text", label: string, category: "sender" | "recipient") => {
+  const handleAddPlaceholderFromSidebar = (type: "signature" | "text", label: string, category: "sender" | "recipient") => {
     const newPlaceholder = {
       id: `placeholder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
@@ -59,12 +70,9 @@ const Template = () => {
 
   const allPlaceholders = [...senderPlaceholders, ...recipientPlaceholders];
 
-  const handleUpdatePlaceholders = (updatedPlaceholders: any[]) => {
-    const senderUpdated = updatedPlaceholders.filter(p => p.category === "sender");
-    const recipientUpdated = updatedPlaceholders.filter(p => p.category === "recipient");
-    
-    setSenderPlaceholders(senderUpdated);
-    setRecipientPlaceholders(recipientUpdated);
+  const handleDropPlaceholder = (type: "signature" | "text", label: string, x: number, y: number, page: number, category: "sender" | "recipient") => {
+    console.log("Drop placeholder from Template:", { type, label, x, y, page, category });
+    handleAddPlaceholder(type, label, x, y, page, category, signatureImage);
   };
 
   const onSaveTemplate = () => {
@@ -130,7 +138,7 @@ const Template = () => {
                 <TemplatePlaceholderSidebar 
                   senderPlaceholders={senderPlaceholders}
                   recipientPlaceholders={recipientPlaceholders}
-                  onAddPlaceholder={handleAddPlaceholder}
+                  onAddPlaceholder={handleAddPlaceholderFromSidebar}
                   onDeletePlaceholder={handlePlaceholderDelete}
                 />
               </div>
@@ -145,14 +153,15 @@ const Template = () => {
                   <DocumentViewer 
                     file={fileUrl}
                     fileType={file?.type || ""}
-                    signatureImage={null}
+                    signatureImage={signatureImage}
                     onApplySignature={() => {}}
                     isSigned={false}
                     placeholders={allPlaceholders}
-                    onUpdatePlaceholders={handleUpdatePlaceholders}
+                    onUpdatePlaceholders={() => {}} // No need to update as we handle it internally
                     onDeletePlaceholder={handlePlaceholderDelete}
                     onPlaceholderDragStart={handlePlaceholderDragStart}
                     onPlaceholderMove={handlePlaceholderMove}
+                    onDropPlaceholder={handleDropPlaceholder}
                     draggedPlaceholderId={draggedPlaceholderId}
                     disableClickToSign={true}
                   />

@@ -23,28 +23,76 @@ export const useTemplateManagement = () => {
   };
 
   const handlePlaceholderMove = (id: string, newX: number, newY: number) => {
-    // Update sender placeholders
-    setSenderPlaceholders(prev => 
-      prev.map(p => 
-        p.id === id 
-          ? { ...p, x: newX, y: newY } 
-          : p
-      )
-    );
+    console.log("Moving placeholder:", id, "to", newX, newY);
+    
+    // Check if it's a sender placeholder
+    const senderPlaceholder = senderPlaceholders.find(p => p.id === id);
+    if (senderPlaceholder) {
+      setSenderPlaceholders(prev => 
+        prev.map(p => 
+          p.id === id 
+            ? { ...p, x: newX, y: newY } 
+            : p
+        )
+      );
+      return;
+    }
 
-    // Update recipient placeholders
-    setRecipientPlaceholders(prev => 
-      prev.map(p => 
-        p.id === id 
-          ? { ...p, x: newX, y: newY } 
-          : p
-      )
-    );
+    // Check if it's a recipient placeholder
+    const recipientPlaceholder = recipientPlaceholders.find(p => p.id === id);
+    if (recipientPlaceholder) {
+      setRecipientPlaceholders(prev => 
+        prev.map(p => 
+          p.id === id 
+            ? { ...p, x: newX, y: newY } 
+            : p
+        )
+      );
+    }
   };
 
   const handlePlaceholderDelete = (placeholderId: string) => {
+    console.log("Deleting placeholder:", placeholderId);
     setSenderPlaceholders(prev => prev.filter(p => p.id !== placeholderId));
     setRecipientPlaceholders(prev => prev.filter(p => p.id !== placeholderId));
+  };
+
+  const handleAddPlaceholder = (type: "signature" | "text", label: string, x: number, y: number, page: number, category: "sender" | "recipient", signatureImage?: string) => {
+    console.log("Adding placeholder:", { type, label, x, y, page, category });
+    
+    // Auto-populate signature for sender if available
+    let initialValue = "";
+    if (type === "signature" && category === "sender" && signatureImage) {
+      initialValue = signatureImage;
+      console.log("Auto-populating sender signature");
+    }
+
+    const newPlaceholder: Placeholder = {
+      id: `placeholder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      label,
+      x,
+      y,
+      page,
+      value: initialValue,
+      category,
+    };
+    
+    console.log("Creating new placeholder:", newPlaceholder);
+    
+    if (category === "sender") {
+      setSenderPlaceholders(prev => {
+        const updated = [...prev, newPlaceholder];
+        console.log("Updated sender placeholders:", updated);
+        return updated;
+      });
+    } else {
+      setRecipientPlaceholders(prev => {
+        const updated = [...prev, newPlaceholder];
+        console.log("Updated recipient placeholders:", updated);
+        return updated;
+      });
+    }
   };
 
   const handleSaveTemplate = (file: File, senderPlaceholders: Placeholder[], recipientPlaceholders: Placeholder[]) => {
@@ -92,6 +140,7 @@ export const useTemplateManagement = () => {
     handlePlaceholderDragStart,
     handlePlaceholderMove,
     handlePlaceholderDelete,
+    handleAddPlaceholder,
     handleSaveTemplate,
   };
 };
