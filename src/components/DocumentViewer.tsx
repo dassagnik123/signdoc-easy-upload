@@ -554,29 +554,36 @@ export const DocumentViewer = ({
     }),
   }));
 
-  // Function to add a new placeholder with category
+  // Function to add a new placeholder with category and auto-populate signature for sender
   const addPlaceholder = (type: "signature" | "text", label: string, x: number, y: number, category: "sender" | "recipient") => {
+    console.log("Adding placeholder:", { type, label, x, y, category });
+    
+    // Auto-populate signature for sender if available
+    let initialValue = "";
+    if (type === "signature" && category === "sender" && signatureImage) {
+      initialValue = signatureImage;
+      console.log("Auto-populating sender signature");
+    }
+
     const newPlaceholder: Placeholder = {
       id: `placeholder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
       label,
       x,
       y,
-      page: pageNumber - 1, // Store 0-based page index - this is crucial for correct page tracking
-      value: type === "signature" && signatureImage ? signatureImage : "",
-      category, // Add category to the placeholder
+      page: pageNumber - 1, // Store 0-based page index
+      value: initialValue,
+      category,
     };
     
-    setPlaceholders(prev => [...prev, newPlaceholder]);
+    console.log("Creating new placeholder:", newPlaceholder);
     
-    // If it's a signature placeholder and we have a signature, apply it
-    if (type === "signature" && signatureImage) {
-      onApplySignature({ 
-        x, 
-        y, 
-        page: pageNumber - 1 // Use 0-based page index - this is crucial
-      });
-    }
+    // Add to existing placeholders instead of replacing
+    setPlaceholders(prev => {
+      const updated = [...prev, newPlaceholder];
+      console.log("Updated placeholders:", updated);
+      return updated;
+    });
   };
 
   return (
