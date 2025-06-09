@@ -539,14 +539,14 @@ export const DocumentViewer = ({
 
   const [{ isOver }, drop] = useDrop(() => ({
     accept: "PLACEHOLDER",
-    drop: (item: { type: "signature" | "text"; label: string }, monitor) => {
+    drop: (item: { type: "signature" | "text"; label: string; category: "sender" | "recipient" }, monitor) => {
       const dropOffset = monitor.getClientOffset();
       if (dropOffset && contentRef.current) {
         const contentRect = contentRef.current.getBoundingClientRect();
         const x = dropOffset.x - contentRect.left;
         const y = dropOffset.y - contentRect.top;
         
-        addPlaceholder(item.type, item.label, x / scale, y / scale);
+        addPlaceholder(item.type, item.label, x / scale, y / scale, item.category);
       }
     },
     collect: (monitor) => ({
@@ -554,8 +554,8 @@ export const DocumentViewer = ({
     }),
   }));
 
-  // Function to add a new placeholder with recipient assignment
-  const addPlaceholder = (type: "signature" | "text", label: string, x: number, y: number, recipientId?: string) => {
+  // Function to add a new placeholder with category
+  const addPlaceholder = (type: "signature" | "text", label: string, x: number, y: number, category: "sender" | "recipient") => {
     const newPlaceholder: Placeholder = {
       id: `placeholder-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
@@ -564,7 +564,7 @@ export const DocumentViewer = ({
       y,
       page: pageNumber - 1, // Store 0-based page index - this is crucial for correct page tracking
       value: type === "signature" && signatureImage ? signatureImage : "",
-      recipientId, // Assign to recipient
+      category, // Add category to the placeholder
     };
     
     setPlaceholders(prev => [...prev, newPlaceholder]);
